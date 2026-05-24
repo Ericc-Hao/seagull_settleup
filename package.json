@@ -1,0 +1,39 @@
+{
+  "name": "seagull_settleup",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo/metro-runtime": "^56.0.12",
+    "expo": "~56.0.4",
+    "expo-clipboard": "^56.0.3",
+    "expo-linear-gradient": "^56.0.4",
+    "expo-router": "^56.2.6",
+    "expo-status-bar": "~56.0.4",
+    "nativewind": "^4.2.4",
+    "react": "19.2.3",
+    "react-dom": "^19.2.3",
+    "react-native": "0.85.3",
+    "react-native-heroicons": "^4.0.0",
+    "react-native-reanimated": "^4.3.1",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/react": "~19.2.2",
+    "babel-preset-expo": "^56.0.12",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "private": true
+}

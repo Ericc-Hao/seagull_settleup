@@ -105,6 +105,8 @@ The deploy workflow writes `dist/CNAME` and `dist/.nojekyll` automatically.
 
 ### Build locally
 
+GitHub Pages web build requires **Node 23+** (the workflow uses **23.11.0**) because Supabase Realtime needs native WebSocket support during Expo static export (`npx expo export -p web`).
+
 ```bash
 npm run web:build
 npm run web:preview

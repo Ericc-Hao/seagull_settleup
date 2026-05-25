@@ -9,6 +9,7 @@
  */
 
 export { colors, type ColorToken } from './colors';
+export { screenBackgroundStyle } from './screen';
 export { spacing, type SpacingToken } from './spacing';
 export { layout, type LayoutToken } from './layout';
 export { typography, fontFamily, type TypographyToken } from './typography';

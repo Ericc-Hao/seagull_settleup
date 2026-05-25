@@ -1,19 +1,17 @@
 import { Pressable, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors, layout, shadows, typography } from '../../theme';
+import { Icon } from '../Icon';
 
 export function HomeSplitGroupCard({
   name,
   balance,
   positive,
-  gradient,
   onPress,
 }: {
   name: string;
   balance: string;
   positive: boolean;
-  gradient: [string, string];
   onPress?: () => void;
 }) {
   const balanceColor = positive ? colors.success : colors.owe;
@@ -29,8 +27,18 @@ export function HomeSplitGroupCard({
         ...shadows.cardSoft,
       }}
     >
-      <View style={{ width: 40, height: 40, borderRadius: 20, overflow: 'hidden', marginBottom: 10 }}>
-        <LinearGradient colors={gradient} style={{ flex: 1 }} />
+      <View
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: colors.background,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 10,
+        }}
+      >
+        <Icon name="user-group" size={18} color={colors.primary} />
       </View>
       <Text style={typography.bodyMedium} numberOfLines={1}>
         {name}

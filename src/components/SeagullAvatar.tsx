@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 
 import { colors, shadows } from '../theme';
+import { AppLogo } from './common/AppLogo';
 
 const AVATAR_COLORS = ['#AAC4FF', '#B1B2FF', '#7DD3A8', '#C4B5FD', '#D2DAFF'];
 
@@ -39,21 +40,22 @@ export function SeagullAvatar({
   );
 }
 
-/** Brand seagull mascot — simple logo mark for headers & cards */
+/** Brand logo mark for headers and cards */
 export function SeagullMascot({ size = 72 }: { size?: number }) {
   return (
     <View
       style={{
         width: size,
         height: size,
-        borderRadius: size * 0.32,
+        borderRadius: size * 0.28,
         backgroundColor: colors.white,
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
         ...shadows.cardSoft,
       }}
     >
-      <Text style={{ fontSize: size * 0.42 }}>🐦</Text>
+      <AppLogo size={size} rounded={false} />
     </View>
   );
 }

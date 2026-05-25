@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { formatCad } from '../data/mockData';
+import { formatCAD } from '../utils/money';
 import { colors, radii, shadows, spacing, typography } from '../theme';
 import { Icon } from './Icon';
 import { SeagullMascot } from './SeagullAvatar';
@@ -37,7 +37,7 @@ export function OverviewCard({
             </Pressable>
             <Text style={[typography.caption, { marginTop: spacing.sm }]}>Total Spent</Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 2 }}>
-              <Text style={typography.amount}>{formatCad(totalSpentCents).replace(/\sCAD$/, '')}</Text>
+              <Text style={typography.amount}>{formatCAD(totalSpentCents).replace(/\sCAD$/, '')}</Text>
               <Text style={[typography.caption, { marginLeft: 6 }]}>CAD</Text>
             </View>
           </View>
@@ -98,7 +98,7 @@ function BalanceRow({
       </View>
       <Text style={typography.caption}>{label}</Text>
       <Text style={[typography.bodyMedium, { marginLeft: 'auto', color: amountColor }]}>
-        {formatCad(amount)}
+        {formatCAD(amount)}
       </Text>
     </View>
   );

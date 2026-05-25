@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 
-import type { TripStatus } from '../state/trip-types';
+import type { GroupStatus } from '../types/models';
 
 const styles: Record<string, { bg: string; text: string; label: string }> = {
   planning: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Planning' },
@@ -10,7 +10,7 @@ const styles: Record<string, { bg: string; text: string; label: string }> = {
   archived: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Archived' },
 };
 
-export function StatusPill({ status, label }: { status: TripStatus; label?: string }) {
+export function StatusPill({ status, label }: { status: GroupStatus; label?: string }) {
   const s = styles[status] ?? styles.active;
   return (
     <View className={`self-start rounded-full px-2 py-0.5 ${s.bg}`}>

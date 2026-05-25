@@ -8,7 +8,7 @@ export function ScreenPageHeader({
   title,
   subtitle,
   onBack,
-  showMascot = true,
+  showMascot = false,
 }: {
   title: string;
   subtitle?: string;

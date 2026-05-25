@@ -2,6 +2,7 @@ import { buttons } from './buttons';
 import { cards } from './cards';
 import { colors } from './colors';
 import { layout } from './layout';
+import { screenBackgroundStyle } from './screen';
 import { fontFamily, typography } from './typography';
 import { radii } from './radii';
 import { shadows } from './shadows';
@@ -24,6 +25,7 @@ export const theme = {
   shadows,
   buttons,
   cards,
+  screenBackgroundStyle,
 } as const;
 
 export type Theme = typeof theme;

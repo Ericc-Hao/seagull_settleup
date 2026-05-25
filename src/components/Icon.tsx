@@ -18,6 +18,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ClipboardDocumentListIcon,
+  Cog6ToothIcon,
   CurrencyDollarIcon,
   DocumentDuplicateIcon,
   DocumentPlusIcon,
@@ -98,7 +99,8 @@ export type IconName =
   | 'envelope'
   | 'chat-bubble'
   | 'document-duplicate'
-  | 'information-circle';
+  | 'information-circle'
+  | 'cog-6-tooth';
 
 const OUTLINE: Record<IconName, ComponentType<HeroIconProps>> = {
   home: HomeIcon,
@@ -143,6 +145,7 @@ const OUTLINE: Record<IconName, ComponentType<HeroIconProps>> = {
   'chat-bubble': ChatBubbleLeftEllipsisIcon,
   'document-duplicate': DocumentDuplicateIcon,
   'information-circle': InformationCircleIcon,
+  'cog-6-tooth': Cog6ToothIcon,
 };
 
 const SOLID: Partial<Record<IconName, ComponentType<HeroIconProps>>> = {

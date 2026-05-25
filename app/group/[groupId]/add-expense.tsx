@@ -1,8 +1,9 @@
-import { useLocalSearchParams } from 'expo-router';
+import { Redirect, useLocalSearchParams } from 'expo-router';
 
-import { AddExpenseScreen } from '../../../src/screens';
-
-export default function AddExpenseRoute() {
+export default function GroupAddExpenseRoute() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
-  return <AddExpenseScreen groupId={groupId ?? 'group-banff'} />;
+  if (!groupId) {
+    return <Redirect href="/add-expense" />;
+  }
+  return <Redirect href={`/add-expense?groupId=${groupId}`} />;
 }

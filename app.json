@@ -6,8 +6,16 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#EEF1FF",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Seagull Split to choose an avatar from your photo library."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "ios": {
       "supportsTablet": true
@@ -19,10 +27,16 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "navigationBar": {
+        "backgroundColor": "#EEF1FF"
+      },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png",
+      "backgroundColor": "#EEF1FF"
     }
   }
 }

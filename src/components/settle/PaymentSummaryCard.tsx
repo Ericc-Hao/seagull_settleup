@@ -1,5 +1,4 @@
 import { Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors, radii, shadows, spacing, typography } from '../../theme';
 import { SeagullAvatar } from '../SeagullAvatar';
@@ -16,23 +15,29 @@ export function PaymentSummaryCard({
   toMemberIds: readonly string[];
 }) {
   return (
-    <View style={[{ borderRadius: radii.lg, overflow: 'hidden' }, shadows.cardSoft]}>
-      <LinearGradient
-        colors={[colors.surfaceMuted, '#F5F7FF', colors.white]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={{ padding: spacing.lg, alignItems: 'center' }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.md }}>
-          <AvatarCluster ids={fromMemberIds} />
-          <Text style={[typography.caption, { color: colors.textSecondary }]}>→</Text>
-          <AvatarCluster ids={toMemberIds} />
-        </View>
-        <Text style={[typography.bodyMedium, { textAlign: 'center', color: colors.textSecondary }]}>
-          {direction}
-        </Text>
-        <Text style={[typography.amount, { fontSize: 32, marginTop: spacing.sm }]}>{amount}</Text>
-      </LinearGradient>
+    <View
+      style={[
+        {
+          borderRadius: radii.lg,
+          overflow: 'hidden',
+          backgroundColor: colors.white,
+          borderWidth: 1,
+          borderColor: colors.borderSubtle,
+          padding: spacing.lg,
+          alignItems: 'center',
+        },
+        shadows.cardSoft,
+      ]}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: spacing.md }}>
+        <AvatarCluster ids={fromMemberIds} />
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>→</Text>
+        <AvatarCluster ids={toMemberIds} />
+      </View>
+      <Text style={[typography.bodyMedium, { textAlign: 'center', color: colors.textSecondary }]}>
+        {direction}
+      </Text>
+      <Text style={[typography.amount, { fontSize: 32, marginTop: spacing.sm }]}>{amount}</Text>
     </View>
   );
 }

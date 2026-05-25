@@ -1,110 +1,155 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 
-import { SETTLE_UP_MOCK, type SettleMode } from '../data/settleUpMock';
+import { useAppData } from '../context/AppDataContext';
 import {
   FormSection,
-  PaymentSummaryCard,
-  PrimaryButton,
   ScreenLayout,
   ScreenPageHeader,
-  SecondaryButton,
-  SegmentedPillLight,
-  SettleHero,
-  SwitchModeCard,
-  TeamSelectCard,
-  TransferDetailList,
 } from '../components';
-import { colors, spacing } from '../theme';
+import {
+  MarkPaidConfirmModal,
+  NoPendingTransfersCard,
+  PendingTransferCard,
+  SettlementHistoryCard,
+  SettlementMethodCard,
+  TeamSelectionCard,
+} from '../components/settlements';
+import { useSettleUpData } from '../hooks/useSettleUpData';
+import { markTransferAsPaid } from '../services/settlementService';
+import type { PendingTransferView } from '../types/views';
+import { colors, layout, typography } from '../theme';
+import { createLogger } from '../utils/logger';
+import { safeBack } from '../utils/navigation';
+import { toUserFriendlyError } from '../utils/errors';
+
+const logger = createLogger('SettleUpScreen');
 
 const SECTION_GAP = 20;
 
 interface SettleUpScreenProps {
-  groupId?: string;
+  groupId: string;
 }
 
-export function SettleUpScreen({ groupId: _groupId }: SettleUpScreenProps) {
-  const [mode, setMode] = useState<SettleMode>(SETTLE_UP_MOCK.defaultMode);
-  const [selectedTeamId, setSelectedTeamId] = useState<string>(SETTLE_UP_MOCK.summary.toTeamId);
+export function SettleUpScreen({ groupId }: SettleUpScreenProps) {
+  const { refresh } = useAppData();
+  const data = useSettleUpData(groupId);
+  const [pendingTransfer, setPendingTransfer] = useState<PendingTransferView | null>(null);
+  const [marking, setMarking] = useState(false);
 
-  const fromTeam = SETTLE_UP_MOCK.teams.find((t) => t.id === SETTLE_UP_MOCK.summary.fromTeamId)!;
-  const toTeam = SETTLE_UP_MOCK.teams.find((t) => t.id === SETTLE_UP_MOCK.summary.toTeamId)!;
+  if (!data.ready) {
+    return (
+      <ScreenLayout
+        header={
+          <ScreenPageHeader
+            title="Pending Transfers"
+            subtitle="Loading..."
+            onBack={() => safeBack(`/group/${groupId}`)}
+            showMascot={false}
+          />
+        }
+      >
+        <Text style={[typography.body, { color: colors.textSecondary }]}>Loading settlement data...</Text>
+      </ScreenLayout>
+    );
+  }
 
-  const transferDetails = [
-    { label: 'Receiver', value: SETTLE_UP_MOCK.transfer.receiver },
-    { label: 'EMT', value: SETTLE_UP_MOCK.transfer.emt },
-    { label: 'Message', value: SETTLE_UP_MOCK.transfer.message },
-  ];
+  if (!data.group) {
+    return (
+      <ScreenLayout
+        header={
+          <ScreenPageHeader
+            title="Pending Transfers"
+            subtitle="Group not found."
+            onBack={() => safeBack('/(tabs)/groups')}
+            showMascot={false}
+          />
+        }
+      >
+        <Text style={[typography.body, { color: colors.textSecondary }]}>
+          This group could not be loaded.
+        </Text>
+      </ScreenLayout>
+    );
+  }
+
+
+  const handleConfirmPaid = async () => {
+    if (!pendingTransfer) {
+      return;
+    }
+    setMarking(true);
+    logger.info('Mark as paid submit started', { groupId, transferId: pendingTransfer.id });
+    try {
+      await markTransferAsPaid(groupId, pendingTransfer);
+      logger.info('Mark as paid submit succeeded', { groupId, transferId: pendingTransfer.id });
+      setPendingTransfer(null);
+      await refresh();
+    } catch (error) {
+      logger.error('Mark as paid submit failed', error, { groupId, transferId: pendingTransfer.id });
+      Alert.alert('Unable to mark as paid', toUserFriendlyError(error, 'Please try again.'));
+    } finally {
+      setMarking(false);
+    }
+  };
 
   return (
     <ScreenLayout
       header={
         <ScreenPageHeader
-          title={SETTLE_UP_MOCK.title}
-          subtitle={SETTLE_UP_MOCK.subtitle}
-          onBack={() => router.back()}
+          title="Pending Transfers"
+          subtitle="Review your outgoing balances."
+          onBack={() => safeBack(`/group/${groupId}`)}
           showMascot={false}
         />
       }
     >
       <View style={{ gap: SECTION_GAP }}>
-        <SettleHero />
+        <SettlementMethodCard value={data.mode} onChange={data.setMode} />
 
-        <SegmentedPillLight
-          options={[
-            { id: 'team' as const, label: 'Couple / Team' },
-            { id: 'individual' as const, label: 'Individual' },
-          ]}
-          value={mode}
-          onChange={setMode}
-        />
+        {data.mode === 'team' ? (
+          <TeamSelectionCard
+            members={data.members}
+            selectedMemberIds={data.teamMemberIds}
+            onToggle={data.toggleTeamMember}
+            onSelectMyself={data.selectMyself}
+            onSelectAll={data.selectAllTeamMembers}
+            onClear={data.clearTeamSelection}
+            validationError={data.teamValidationError}
+          />
+        ) : null}
 
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          {SETTLE_UP_MOCK.teams.map((team) => (
-            <TeamSelectCard
-              key={team.id}
-              team={team}
-              selected={selectedTeamId === team.id}
-              onPress={() => setSelectedTeamId(team.id)}
-            />
-          ))}
-        </View>
-
-        <PaymentSummaryCard
-          direction={SETTLE_UP_MOCK.summary.direction}
-          amount={SETTLE_UP_MOCK.summary.amount}
-          fromMemberIds={fromTeam.memberIds}
-          toMemberIds={toTeam.memberIds}
-        />
-
-        <FormSection label="Transfer Details">
-          <TransferDetailList items={transferDetails} />
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: spacing.lg }}>
-            <View style={{ flex: 1 }}>
-              <SecondaryButton
-                label={SETTLE_UP_MOCK.actions.copyLabel}
-                icon="document-duplicate"
-                onPress={() => {}}
-                variant="outline"
-              />
+        <FormSection label="Your Pending Transfers" noPadding>
+          {data.outgoingTransfers.length > 0 ? (
+            <View style={{ gap: layout.cardGap }}>
+              {data.outgoingTransfers.map((transfer) => (
+                <PendingTransferCard
+                  key={transfer.id}
+                  transfer={transfer}
+                  marking={marking && pendingTransfer?.id === transfer.id}
+                  onMarkPaid={() => setPendingTransfer(transfer)}
+                />
+              ))}
             </View>
-            <View style={{ flex: 1 }}>
-              <PrimaryButton
-                label={SETTLE_UP_MOCK.actions.markPaidLabel}
-                icon="check-circle"
-                onPress={() => {}}
-              />
-            </View>
-          </View>
+          ) : (
+            <NoPendingTransfersCard />
+          )}
         </FormSection>
 
-        <SwitchModeCard
-          title={SETTLE_UP_MOCK.switchMode.title}
-          hint={SETTLE_UP_MOCK.switchMode.hint}
-          onPress={() => setMode('individual')}
-        />
+        <SettlementHistoryCard items={data.settlementHistory} />
       </View>
+
+      <MarkPaidConfirmModal
+        visible={Boolean(pendingTransfer)}
+        transfer={pendingTransfer}
+        confirming={marking}
+        onCancel={() => {
+          if (!marking) {
+            setPendingTransfer(null);
+          }
+        }}
+        onConfirm={() => void handleConfirmPaid()}
+      />
     </ScreenLayout>
   );
 }

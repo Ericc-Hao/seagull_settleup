@@ -3,7 +3,10 @@ import { Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, layout, shadows, typography } from '../theme';
+import { createLogger } from '../utils/logger';
 import { Icon, IconName } from './Icon';
+
+const logger = createLogger('BottomTabBar');
 
 const TABS = ['home', 'expenses', 'groups', 'profile'] as const;
 type TabName = (typeof TABS)[number];
@@ -55,7 +58,10 @@ export function BottomTabBar({ state, navigation }: BottomTabBarProps) {
         {renderTab('expenses', focusedName, navigation)}
         <View style={{ width: 64, alignItems: 'center' }}>
           <Pressable
-            onPress={() => router.push('/create-group')}
+            onPress={() => {
+              logger.info('Bottom tab plus pressed', { target: 'AddExpense' });
+              router.push('/add-expense');
+            }}
             style={({ pressed }) => ({
               marginTop: -28,
               width: 54,

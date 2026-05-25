@@ -162,8 +162,8 @@ export function calculateTeamBalances(
       throw new Error(`Balance references unknown member ${balance.memberId}.`);
     }
 
-    const fallbackSoloTeamId = `solo:${member.id}`;
-    const teamId = member.teamId ?? fallbackSoloTeamId;
+    const soloTeamId = `solo:${member.id}`;
+    const teamId = member.teamId ?? soloTeamId;
 
     if (member.teamId && !teamById.has(member.teamId)) {
       throw new Error(`Member ${member.id} references unknown team ${member.teamId}.`);

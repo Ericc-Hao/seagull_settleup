@@ -7,6 +7,7 @@ export const colors = {
   primary: '#B1B2FF',
   secondary: '#AAC4FF',
   tertiary: '#D2DAFF',
+  /** Page/viewport background (#EEF1FF). Use for screen roots, SafeAreaView, Stack contentStyle — not cards. */
   background: '#EEF1FF',
   white: '#FFFFFF',
 

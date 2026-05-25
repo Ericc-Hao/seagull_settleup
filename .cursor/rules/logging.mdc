@@ -1,0 +1,43 @@
+---
+description: Structured logging standard for Seagull Split services, hooks, and critical actions
+alwaysApply: true
+---
+
+# Logging Standard
+
+Use the shared logger from `src/utils/logger.ts`. Do not use raw `console.log`, `console.info`, `console.warn`, or `console.error` in application code except inside `logger.ts`.
+
+## Required practices
+
+1. All new service functions must include proper logging.
+2. All Supabase read/write operations should log:
+   - operation name
+   - table name (when applicable)
+   - success or failure
+   - useful identifiers such as `groupId`, `expenseId`, `invitationId` when available
+3. All caught errors must call `logger.error()`.
+4. Never log passwords, tokens, auth sessions, API keys, or full profile objects.
+5. Mask emails in logs using `maskEmail()` from `src/utils/validation.ts`.
+6. Logging must be concise, structured, and searchable.
+7. UI components should not over-log. Business logic in services, hooks, and critical user actions should log.
+8. Every new feature should log:
+   - start of operation
+   - success
+   - failure
+9. In production, `debug` and `info` logs are disabled by default. Warnings and errors remain enabled.
+
+## Usage
+
+```typescript
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('groupService');
+
+logger.info('Create group started', { table: 'groups', invitedCount: 2 });
+logger.info('Create group succeeded', { table: 'groups', groupId });
+logger.error('Create group failed', error, { table: 'groups' });
+```
+
+## User-facing errors
+
+Use `toUserFriendlyError()` from `src/utils/errors.ts` for UI messages. Keep technical detail in logs only.

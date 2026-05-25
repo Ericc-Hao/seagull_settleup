@@ -4,28 +4,23 @@
 
 - `/(tabs)/home` — Trip list, create trip CTA
 - `/(tabs)/profile` — Theme + account shell
-- `/create-trip` — Modal create trip flow
+- `/create-group` — Modal create group flow
 
-## Trip workspace (`/trip/[tripId]`)
+## Group workspace (`/group/[groupId]`)
 
 | Route | Purpose |
 | --- | --- |
-| `index` | Trip dashboard — summary, quick actions, settle when ready |
-| `people` | Member list, invite placeholder |
-| `people/add` | Manual add person |
-| `expenses` | Add expense + timeline |
-| `settlement` | Review → transfers → mark paid → complete run |
-| `settings` | Trip metadata + per-member EMT |
+| `add-expense` | Add personal or split expense |
+| `settle-up` | Review calculated transfers and mark paid |
 
 ## User flow
 
-1. Home → Create trip
-2. Trip dashboard → Add people (≥2)
-3. Record expenses during trip
-4. When ready → Settlement review → EMT list
-5. Mark paid → Complete settlement run
+1. Home → Create group
+2. Add members and record expenses
+3. Review settlement transfers
+4. Mark paid when settled
 
 ## State
 
-- [`src/state/trips-context.tsx`](../src/state/trips-context.tsx) — multi-trip store
-- [`src/state/trip-selectors.ts`](../src/state/trip-selectors.ts) — status, summaries, transfers
+- Supabase Auth stores session state through AsyncStorage.
+- Business data is loaded from Supabase through `src/services`.

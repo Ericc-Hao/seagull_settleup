@@ -1,8 +1,6 @@
 import { Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors, layout, shadows, typography } from '../../theme';
-import { SeagullMascot } from '../SeagullAvatar';
 
 export interface SummaryStat {
   label: string;
@@ -15,7 +13,7 @@ export function SummaryOverviewCard({
   primaryLabel,
   primaryValue,
   stats,
-  showMascot = true,
+  showMascot = false,
 }: {
   title: string;
   primaryLabel: string;
@@ -29,39 +27,31 @@ export function SummaryOverviewCard({
         width: '100%',
         borderRadius: layout.cardRadius,
         overflow: 'hidden',
+        backgroundColor: colors.white,
+        borderWidth: 1,
+        borderColor: colors.borderSubtle,
+        padding: layout.cardPadding,
         ...shadows.cardSoft,
       }}
     >
-      <LinearGradient
-        colors={['#F0F2FF', '#FAFBFF', colors.white]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0.5 }}
-        style={{ padding: layout.cardPadding }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-          <View style={{ flex: 1, paddingRight: showMascot ? 8 : 0 }}>
-            <Text style={typography.sectionTitle}>{title}</Text>
-            <Text style={[typography.caption, { marginTop: layout.cardGap, color: colors.textSecondary }]}>
-              {primaryLabel}
-            </Text>
-            <Text style={[typography.amountLarge, { fontSize: 28, marginTop: 4 }]}>{primaryValue}</Text>
-            {stats && stats.length > 0 ? (
-              <View style={{ marginTop: layout.sectionGap / 2 }}>
-                {stats.map((stat, index) => (
-                  <View key={stat.label} style={{ marginTop: index === 0 ? 0 : 10 }}>
-                    <StatRow {...stat} />
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
-          {showMascot ? (
-            <View style={{ marginTop: -4 }}>
-              <SeagullMascot size={64} />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1, paddingRight: 0 }}>
+          <Text style={typography.sectionTitle}>{title}</Text>
+          <Text style={[typography.caption, { marginTop: layout.cardGap, color: colors.textSecondary }]}>
+            {primaryLabel}
+          </Text>
+          <Text style={[typography.amountLarge, { fontSize: 28, marginTop: 4 }]}>{primaryValue}</Text>
+          {stats && stats.length > 0 ? (
+            <View style={{ marginTop: layout.sectionGap / 2 }}>
+              {stats.map((stat, index) => (
+                <View key={stat.label} style={{ marginTop: index === 0 ? 0 : 10 }}>
+                  <StatRow {...stat} />
+                </View>
+              ))}
             </View>
           ) : null}
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 }

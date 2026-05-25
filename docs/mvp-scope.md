@@ -50,7 +50,7 @@ Users can input shared expenses manually and instantly get a clear "who pays who
 
 ### AC-01 Group + member setup
 
-Given a user creates a group named "Banff Trip" in CAD,  
+Given a user creates a group in CAD,  
 when they add A, B, C, D manually,  
 then the group dashboard shows the 4 members and group status is active.
 
@@ -92,7 +92,7 @@ then output is:
 
 Given a settlement transfer has receiver EMT profile,  
 when user views transfer details,  
-then app shows receiver EMT email/phone and an EMT message template and allows one-tap copy.
+then app shows receiver EMT email/phone and a settlement message and allows one-tap copy.
 
 ## Implementation phases
 

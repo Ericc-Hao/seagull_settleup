@@ -69,7 +69,7 @@ export function MainTabBar({ state, navigation }: MainTabBarProps) {
         {renderTab('expenses')}
         <View className="items-center px-1" style={{ width: 72 }}>
           <Pressable
-            onPress={() => router.push('/create-trip')}
+            onPress={() => router.push('/create-group')}
             className="-mt-10 h-[58px] w-[58px] items-center justify-center rounded-full bg-brand-300"
             style={shadows.fab}
           >

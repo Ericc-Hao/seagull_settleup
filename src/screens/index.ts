@@ -1,4 +1,10 @@
+export { ExpenseDetailScreen } from './ExpenseDetailScreen';
 export { HomeScreen } from './HomeScreen';
 export { CreateGroupScreen } from './CreateGroupScreen';
+export { GroupDetailScreen } from './GroupDetailScreen';
+export { InviteMembersScreen } from './InviteMembersScreen';
+export { ManageMembersScreen } from './ManageMembersScreen';
+export { EditGroupScreen } from './EditGroupScreen';
 export { AddExpenseScreen } from './AddExpenseScreen';
 export { SettleUpScreen } from './SettleUpScreen';
+export { EditProfileScreen } from './EditProfileScreen';

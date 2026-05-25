@@ -1,0 +1,7 @@
+-- Seagull Split — Supabase schema
+--
+-- Copy and run the production migrations in order:
+--   supabase/migrations/202605240001_init_core_schema.sql
+--   supabase/migrations/202605240002_add_receipts_categories.sql
+--
+-- No example business data is included. User-created data comes from the app only.

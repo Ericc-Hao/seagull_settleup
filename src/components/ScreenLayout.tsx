@@ -1,8 +1,8 @@
 import { ReactNode } from 'react';
 import { ScrollView, View, ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, layout } from '../theme';
+import { ScreenContainer } from './layout/ScreenContainer';
 
 export function ScreenLayout({
   children,
@@ -10,12 +10,14 @@ export function ScreenLayout({
   footer,
   scroll = true,
   contentStyle,
+  bottomTabPadding = true,
 }: {
   children: ReactNode;
   header?: ReactNode;
   footer?: ReactNode;
   scroll?: boolean;
   contentStyle?: ViewStyle;
+  bottomTabPadding?: boolean;
 }) {
   const content = (
     <View
@@ -33,24 +35,36 @@ export function ScreenLayout({
 
   const body = scroll ? (
     <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         paddingHorizontal: layout.screenPadding,
-        paddingBottom: layout.scrollBottomPadding,
+        paddingBottom: bottomTabPadding ? layout.scrollBottomPadding : layout.sectionGap,
         flexGrow: 1,
+        backgroundColor: colors.background,
       }}
     >
       {content}
     </ScrollView>
   ) : (
-    <View style={{ flex: 1, paddingHorizontal: layout.screenPadding }}>{content}</View>
+    <View
+      style={{
+        flex: 1,
+        paddingHorizontal: layout.screenPadding,
+        backgroundColor: colors.background,
+      }}
+    >
+      {content}
+    </View>
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
-      {header}
-      {body}
-      {footer ? <View style={{ backgroundColor: colors.background }}>{footer}</View> : null}
-    </SafeAreaView>
+    <ScreenContainer scrollable={false}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {header ? <View style={{ backgroundColor: colors.background }}>{header}</View> : null}
+        {body}
+        {footer ? <View style={{ backgroundColor: colors.background }}>{footer}</View> : null}
+      </View>
+    </ScreenContainer>
   );
 }

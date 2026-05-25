@@ -4,7 +4,7 @@ import { View } from 'react-native';
 
 import { BRAND } from './theme';
 
-/** Soft sky + coast header band matching mockup illustrations */
+/** Soft sky + coast header band */
 export function ScenicHeader({ children, tall = false }: { children?: ReactNode; tall?: boolean }) {
   return (
     <View className={`relative overflow-hidden rounded-b-[28px] ${tall ? 'min-h-[148px]' : 'min-h-[108px]'}`}>

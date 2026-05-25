@@ -22,7 +22,7 @@ const teams: Team[] = [
 ];
 
 describe('settlement core', () => {
-  it('calculates member balances for the Banff example', () => {
+  it('calculates member balances for an equal split example', () => {
     const expenses = [
       { id: 'e1', payerMemberId: 'A', amountCents: 200000, splits: buildEqualSplits(['A', 'B', 'C', 'D'], 200000) },
       { id: 'e2', payerMemberId: 'B', amountCents: 90000, splits: buildEqualSplits(['A', 'B', 'C', 'D'], 90000) },
@@ -37,7 +37,7 @@ describe('settlement core', () => {
     expect(byMember.get('D')).toMatchObject({ paidCents: 0, owedCents: 72500, balanceCents: -72500 });
   });
 
-  it('generates optimized individual transfers for the Banff example', () => {
+  it('generates optimized individual transfers for an equal split example', () => {
     const transfers = optimizeTransfers([
       { id: 'A', balanceCents: 127500 },
       { id: 'B', balanceCents: 17500 },

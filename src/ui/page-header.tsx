@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -7,6 +6,7 @@ import { Mascot } from './mascot';
 import { ScenicHeader } from './scenic-header';
 import { shadows } from '../theme';
 import { BRAND } from './theme';
+import { safeBack } from '../utils/navigation';
 
 export function PageHeader({
   title,
@@ -27,7 +27,7 @@ export function PageHeader({
     <ScenicHeader tall>
       <View className="flex-row items-start justify-between">
         <Pressable
-          onPress={onBack ?? (() => router.back())}
+          onPress={onBack ?? (() => safeBack('/(tabs)/home'))}
           className="h-10 w-10 items-center justify-center rounded-full bg-white"
           style={shadows.cardSoft}
         >

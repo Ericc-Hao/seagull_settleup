@@ -6,7 +6,7 @@
 - **Expo Router** for navigation
 - **NativeWind** (Tailwind) + `src/theme` design tokens
 - **react-native-heroicons** for icons
-- **Mock data only** (no backend)
+- **Supabase** (`EXPO_PUBLIC_SUPABASE_*`) as the single source of truth
 
 ## Color palette
 
@@ -34,9 +34,21 @@ app/                          # Expo Router routes (thin wrappers)
 
 src/
   theme/                      # design system: colors, typography, spacing, radii, shadows, buttons, cards
+  types/                      # models, inputs, view DTOs
+  lib/
+    supabase.ts               # Supabase client (AsyncStorage session)
+    supabaseSnapshot.ts       # fetch all tables → cache
+    dataCache.ts              # in-memory read cache for UI
+    mappers.ts                # DB rows → domain models
   data/
-    mockData.ts               # all mock groups, expenses, settlement
-    types.ts
+    constants.ts              # UI copy, categories, quick actions
+  services/                   # group, expense, member, settlement, profile, home
+  hooks/                      # useHomeData, useGroupsData, useExpensesData, etc.
+  context/
+    AppDataContext.tsx        # refresh() after mutations
+  utils/
+    money.ts                  # integer cents only
+    date.ts
   components/                 # reusable UI
     AppHeader.tsx
     SeagullAvatar.tsx
@@ -56,7 +68,6 @@ src/
     AddExpenseScreen.tsx
     SettleUpScreen.tsx
   core/settlement/            # settlement engine (tests)
-  state/                      # legacy trip state (optional)
 ```
 
 ## Run
@@ -64,4 +75,21 @@ src/
 ```bash
 npm start
 npm run typecheck
+npm test
 ```
+
+## Data flow
+
+```
+Screen → hook → service → Supabase → dataCache
+                ↓
+         core/settlement (balance + transfer optimization)
+```
+
+Mutations call `refresh()` from `AppDataProvider` to reload Supabase into cache.
+
+### Supabase setup
+
+1. Copy `.env.example` → `.env` (or use project values).
+2. Run `db/supabase_app_schema.sql` in the Supabase SQL editor.
+3. Restart Expo (`npm start`).

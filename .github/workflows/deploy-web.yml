@@ -25,6 +25,8 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" != "main" ]; then
             echo "This workflow must be run from the main branch."
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            echo "This workflow must be run from the main branch."
             exit 1
           fi
 

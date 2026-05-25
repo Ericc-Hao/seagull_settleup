@@ -118,15 +118,15 @@ The static export is written to `dist/`.
 
 Deployment is manual only — it does not run on push to `main` or any other branch.
 
-1. Push code to the `web` branch.
+1. Push code to the `main` branch.
 2. Go to **GitHub → Actions**.
 3. Select **Deploy Web to GitHub Pages**.
 4. Click **Run workflow**.
-5. Choose branch: **`web`**.
+5. Choose branch: **`main`**.
 6. Click **Run workflow**.
 7. Visit [https://split.seagullcoffee.ca](https://split.seagullcoffee.ca).
 
-If you run the workflow from any branch other than `web`, it fails with: *This workflow must be run from the web branch.*
+If you run the workflow from any branch other than `main`, it fails with: *This workflow must be run from the main branch.*
 
 ### Invitation email web links
 

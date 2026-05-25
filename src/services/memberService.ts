@@ -324,7 +324,7 @@ export function partitionMembers(members: GroupMemberWithProfile[]) {
       m.invitationStatus === 'declined' ||
       m.invitationStatus === 'removed' ||
       m.invitationStatus === 'cancelled' ||
-      m.isActive === false,
+      (m.isActive === false && m.invitationStatus !== 'pending'),
   );
   return { active, pending, inactive };
 }

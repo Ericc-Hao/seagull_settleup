@@ -12,14 +12,14 @@ interface SignUpInput {
   email: string;
   password: string;
   displayName: string;
-  phone: string;
+  phone?: string;
   avatarUri?: string;
 }
 
 export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User | null; session: Session | null }> {
   const email = input.email.trim();
   const displayName = input.displayName.trim();
-  const phone = input.phone.trim();
+  const phone = input.phone?.trim() ?? '';
 
   logger.info('Sign up started', { email: maskEmail(email), table: 'auth.users' });
 
@@ -31,7 +31,7 @@ export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User 
         data: {
           display_name: displayName,
           name: displayName,
-          phone,
+          ...(phone ? { phone } : {}),
         },
       },
     });
@@ -54,10 +54,10 @@ export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User 
         id: data.user.id,
         display_name: displayName,
         email,
-        phone,
+        phone: phone || null,
         avatar_url: avatarUrl ?? null,
         emt_email: email,
-        emt_phone: phone,
+        emt_phone: phone || null,
         default_currency: 'CAD',
         onboarding_completed: true,
       });

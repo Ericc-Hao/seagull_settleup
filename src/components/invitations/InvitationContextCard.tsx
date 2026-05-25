@@ -1,51 +1,21 @@
-import { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 
-import { getInvitationPreviewByToken } from '../../services/invitationService';
 import { colors, layout, radii, spacing, typography } from '../../theme';
 import type { InvitationPreviewView } from '../../types/views';
 import { formatInviterByLine } from '../../utils/invitationCopy';
-import { createLogger } from '../../utils/logger';
+import { maskEmail } from '../../utils/validation';
 
-const logger = createLogger('InvitationContextCard');
-
-export function InvitationContextCard({ inviteToken }: { inviteToken?: string }) {
-  const [preview, setPreview] = useState<InvitationPreviewView | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const trimmed = inviteToken?.trim();
-    if (!trimmed) {
-      setPreview(null);
-      return;
-    }
-
-    let mounted = true;
-    setLoading(true);
-    logger.info('Invitation context card load started');
-
-    void getInvitationPreviewByToken(trimmed)
-      .then((result) => {
-        if (mounted) {
-          setPreview(result);
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          setPreview(null);
-        }
-      })
-      .finally(() => {
-        if (mounted) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [inviteToken]);
-
+export function InvitationContextCard({
+  inviteToken,
+  preview,
+  loading = false,
+  fetchFailed = false,
+}: {
+  inviteToken?: string;
+  preview?: InvitationPreviewView | null;
+  loading?: boolean;
+  fetchFailed?: boolean;
+}) {
   if (!inviteToken?.trim()) {
     return null;
   }
@@ -60,14 +30,18 @@ export function InvitationContextCard({ inviteToken }: { inviteToken?: string })
           borderWidth: 1,
           borderColor: colors.borderSubtle,
           alignItems: 'center',
+          gap: spacing.sm,
         }}
       >
         <ActivityIndicator color={colors.primary} />
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>Loading invitation...</Text>
       </View>
     );
   }
 
-  if (!preview || !preview.isValid) {
+  const isPending = preview?.status === 'pending' && preview.isValid;
+
+  if (fetchFailed || !preview || !isPending) {
     return (
       <View
         style={{
@@ -79,14 +53,19 @@ export function InvitationContextCard({ inviteToken }: { inviteToken?: string })
           borderColor: colors.borderSubtle,
         }}
       >
-        <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>
-          This invitation link is invalid or expired.
+        <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>Invitation unavailable</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
+          This invitation link is invalid, expired, or has already been used.
+        </Text>
+        <Text style={[typography.caption, { color: colors.textTertiary, lineHeight: 18 }]}>
+          You can still create an account below.
         </Text>
       </View>
     );
   }
 
   const inviterLine = formatInviterByLine(preview.inviterName, preview.inviterEmail);
+  const invitedEmailLabel = preview.invitedEmail ? maskEmail(preview.invitedEmail) : 'your invited email';
 
   return (
     <View
@@ -99,16 +78,12 @@ export function InvitationContextCard({ inviteToken }: { inviteToken?: string })
         borderColor: colors.borderSubtle,
       }}
     >
-      <Text style={[typography.caption, { color: colors.textSecondary }]}>Group invitation</Text>
+      <Text style={[typography.caption, { color: colors.textSecondary }]}>You've been invited</Text>
       <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>
-        Invitation to join {preview.groupName}
-      </Text>
-      <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 22 }]}>
-        Invited by {inviterLine}
+        {inviterLine} invited you to join "{preview.groupName}".
       </Text>
       <Text style={[typography.caption, { color: colors.textTertiary, lineHeight: 18 }]}>
-        You've been invited to join a group on Seagull Split. Create an account with the invited email
-        to continue.
+        Create an account with {invitedEmailLabel} to accept this invitation.
       </Text>
     </View>
   );

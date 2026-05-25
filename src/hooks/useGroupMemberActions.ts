@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { Alert } from 'react-native';
 
 import { useAppData } from '../context/AppDataContext';
 import {
@@ -71,13 +72,25 @@ export function useGroupMemberActions(groupId: string, refreshMembers: () => Pro
       setActionLoading(true);
       setActionError(undefined);
       try {
-        await resendInvitation(invitationId);
+        const result = await resendInvitation(invitationId);
         await refresh();
         await refreshMembers();
+
+        if (!result.sent) {
+          const message = result.error ?? 'Unable to send the reminder email.';
+          setActionError(message);
+          Alert.alert('Unable to resend invitation', message);
+          return result;
+        }
+
+        Alert.alert('Invitation sent', 'The reminder email was sent successfully.');
         logger.info('Resend invitation succeeded', { groupId, invitationId });
+        return result;
       } catch (error) {
         logger.error('Resend invitation failed', error, { groupId, invitationId });
-        setActionError(toUserFriendlyError(error, 'Unable to resend invitation.'));
+        const message = toUserFriendlyError(error, 'Unable to resend invitation.');
+        setActionError(message);
+        Alert.alert('Unable to resend invitation', message);
         throw error;
       } finally {
         setActionLoading(false);

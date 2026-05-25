@@ -7,7 +7,13 @@ import type { GroupInvitation, GroupMember } from '../types/models';
 import type { InvitationPreviewView, PendingInvitationView } from '../types/views';
 import { createLogger } from '../utils/logger';
 import { formatInvitationNotificationBody } from '../utils/invitationCopy';
-import { hasDuplicateEmail, isValidEmail, maskEmail, normalizeEmail } from '../utils/validation';
+import { isValidEmail, maskEmail, normalizeEmail } from '../utils/validation';
+import {
+  buildGroupEmailOccupancy,
+  classifyInviteDuplicate,
+  duplicateInviteWarning,
+  REUSABLE_MEMBER_STATUSES,
+} from './invitationDuplicateRules';
 import {
   ensureInvitationNotification,
   markInvitationNotificationsAsRead,
@@ -307,10 +313,16 @@ async function assertGroupOwner(groupId: string, userId: string): Promise<void> 
   }
 }
 
-async function existingEmailsForGroup(groupId: string): Promise<string[]> {
+async function getGroupEmailOccupancy(groupId: string): Promise<{
+  activeMemberEmails: Set<string>;
+  pendingInvitationEmails: Set<string>;
+}> {
   const [{ data: members, error: membersError }, { data: invitations, error: invitationsError }] =
     await Promise.all([
-      supabase.from('group_members').select('email').eq('group_id', groupId),
+      supabase
+        .from('group_members')
+        .select('email, invitation_status, is_active, role')
+        .eq('group_id', groupId),
       supabase
         .from('group_invitations')
         .select('invited_email')
@@ -325,14 +337,77 @@ async function existingEmailsForGroup(groupId: string): Promise<string[]> {
     throw invitationsError;
   }
 
-  const emails = [
-    ...(members ?? []).map((row) => row.email),
-    ...(invitations ?? []).map((row) => row.invited_email),
-  ]
-    .filter(Boolean)
-    .map((email) => normalizeEmail(email as string));
+  return buildGroupEmailOccupancy(
+    members ?? [],
+    (invitations ?? []).map((row) => row.invited_email).filter(Boolean) as string[],
+  );
+}
 
-  return Array.from(new Set(emails));
+async function findReusableMemberRow(groupId: string, invitedEmail: string) {
+  const { data, error } = await supabase
+    .from('group_members')
+    .select('*')
+    .eq('group_id', groupId)
+    .eq('email', invitedEmail)
+    .in('invitation_status', [...REUSABLE_MEMBER_STATUSES])
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+async function upsertPendingMemberForInvite(
+  groupId: string,
+  invitedEmail: string,
+): Promise<GroupMember> {
+  const invitedProfile = await findProfileByEmail(invitedEmail);
+  const displayName = invitedProfile?.displayName || emailPrefix(invitedEmail);
+  const reusableMember = await findReusableMemberRow(groupId, invitedEmail);
+
+  if (reusableMember) {
+    const { data: memberRow, error: memberError } = await supabase
+      .from('group_members')
+      .update({
+        user_id: invitedProfile?.id ?? null,
+        display_name: displayName,
+        nickname: displayName,
+        role: 'member',
+        invitation_status: 'pending',
+        is_active: false,
+      })
+      .eq('id', reusableMember.id)
+      .select('*')
+      .single();
+
+    if (memberError) {
+      throw memberError;
+    }
+    return mapGroupMember(memberRow);
+  }
+
+  const { data: memberRow, error: memberError } = await supabase
+    .from('group_members')
+    .insert({
+      group_id: groupId,
+      user_id: invitedProfile?.id ?? null,
+      email: invitedEmail,
+      display_name: displayName,
+      nickname: displayName,
+      role: 'member',
+      invitation_status: 'pending',
+      is_active: false,
+    })
+    .select('*')
+    .single();
+
+  if (memberError) {
+    throw memberError;
+  }
+  return mapGroupMember(memberRow);
 }
 
 export async function createGroupInvitation(
@@ -346,28 +421,7 @@ export async function createGroupInvitation(
   });
 
   try {
-    const invitedProfile = await findProfileByEmail(invitedEmail);
-    const displayName = invitedProfile?.displayName || emailPrefix(invitedEmail);
-
-    const { data: memberRow, error: memberError } = await supabase
-      .from('group_members')
-      .insert({
-        group_id: input.groupId,
-        user_id: invitedProfile?.id ?? null,
-        email: invitedEmail,
-        display_name: displayName,
-        nickname: displayName,
-        role: 'member',
-        invitation_status: 'pending',
-        is_active: false,
-      })
-      .select('*')
-      .single();
-
-    if (memberError) {
-      throw memberError;
-    }
-    const member = mapGroupMember(memberRow);
+    const member = await upsertPendingMemberForInvite(input.groupId, invitedEmail);
 
     const { data: invitationRow, error: invitationError } = await supabase
       .from('group_invitations')
@@ -375,7 +429,7 @@ export async function createGroupInvitation(
         group_id: input.groupId,
         invited_by: input.invitedBy,
         invited_email: invitedEmail,
-        invited_user_id: invitedProfile?.id ?? null,
+        invited_user_id: member.userId ?? null,
         group_member_id: member.id,
         status: 'pending',
         token: createInviteToken(),
@@ -481,15 +535,16 @@ export async function inviteMoreMembers(
       }
     }
 
-    const existingEmails = await existingEmailsForGroup(groupId);
+    const occupancy = await getGroupEmailOccupancy(groupId);
     const members: GroupMember[] = [];
     const invitations: GroupInvitation[] = [];
     const emailResults: InvitationEmailResult[] = [];
     const warnings: string[] = [];
 
     for (const email of normalizedEmails) {
-      if (hasDuplicateEmail(existingEmails, email)) {
-        warnings.push(`${maskEmail(email)} is already invited or a member.`);
+      const duplicateReason = classifyInviteDuplicate(email, occupancy);
+      if (duplicateReason) {
+        warnings.push(duplicateInviteWarning(duplicateReason));
         continue;
       }
 
@@ -501,7 +556,8 @@ export async function inviteMoreMembers(
       });
       members.push(member);
       invitations.push(invitation);
-      existingEmails.push(email);
+      occupancy.activeMemberEmails.delete(normalizeEmail(email));
+      occupancy.pendingInvitationEmails.add(normalizeEmail(email));
 
       const emailResult = await sendInvitationEmail(invitation.id);
       emailResults.push(emailResult);
@@ -543,9 +599,6 @@ export async function resendInvitation(invitationId: string): Promise<Invitation
     }
 
     await assertGroupOwner(invitation.group_id, userId);
-    if (invitation.invited_by !== userId) {
-      throw new Error('Only the group owner can resend invitations.');
-    }
 
     const result = await sendInvitationEmail(invitationId);
     await refreshCache();
@@ -632,39 +685,81 @@ export async function getInvitationPreviewByToken(token: string): Promise<Invita
     return null;
   }
 
-  logger.info('Invitation preview by token started', { table: 'group_invitations' });
+  logger.info('Get invitation preview started', { hasToken: Boolean(trimmedToken) });
+
   try {
-    const { data, error } = await supabase.rpc('get_invitation_preview_by_token', {
-      invite_token: trimmedToken,
+    const { data, error } = await supabase.functions.invoke('get-invitation-preview', {
+      body: { token: trimmedToken },
     });
 
     if (error) {
       throw error;
     }
 
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) {
-      logger.info('Invitation preview by token not found', { table: 'group_invitations' });
+    const payload = data as {
+      success?: boolean;
+      error?: string;
+      invitation?: {
+        invitationId: string;
+        token?: string;
+        groupId?: string;
+        groupName?: string;
+        invitedEmail?: string;
+        inviterName?: string;
+        inviterEmail?: string;
+        status?: InvitationPreviewView['status'];
+        expiresAt?: string | null;
+        isValid?: boolean;
+      };
+      preview?: {
+        invitationId: string;
+        token?: string;
+        groupId?: string;
+        groupName?: string;
+        invitedEmail?: string;
+        inviterName?: string;
+        inviterEmail?: string;
+        status?: InvitationPreviewView['status'];
+        expiresAt?: string | null;
+        isValid?: boolean;
+      };
+    } | null;
+
+    if (!payload?.success) {
+      if (payload?.error === 'Invitation not found') {
+        logger.info('Get invitation preview succeeded', { hasInvitation: false });
+        return null;
+      }
+      throw new Error(payload?.error ?? 'Unable to load invitation preview.');
+    }
+
+    const invitation = payload.invitation ?? payload.preview;
+    if (!invitation) {
+      logger.info('Get invitation preview succeeded', { hasInvitation: false });
       return null;
     }
 
     const preview: InvitationPreviewView = {
-      invitationId: row.invitation_id,
-      groupName: row.group_name?.trim() || 'this group',
-      inviterName: row.inviter_name?.trim() || undefined,
-      inviterEmail: row.inviter_email?.trim() || undefined,
-      invitedEmail: row.invited_email?.trim() || '',
-      isValid: Boolean(row.is_valid),
+      invitationId: invitation.invitationId,
+      token: invitation.token ?? trimmedToken,
+      groupId: invitation.groupId,
+      groupName: invitation.groupName?.trim() || 'this group',
+      inviterName: invitation.inviterName?.trim() || undefined,
+      inviterEmail: invitation.inviterEmail?.trim() || undefined,
+      invitedEmail: invitation.invitedEmail?.trim() || '',
+      status: invitation.status ?? 'cancelled',
+      expiresAt: invitation.expiresAt ?? null,
+      isValid: Boolean(invitation.isValid),
     };
 
-    logger.info('Invitation preview by token succeeded', {
+    logger.info('Get invitation preview succeeded', {
+      hasInvitation: true,
+      status: preview.status,
       invitationId: preview.invitationId,
-      table: 'group_invitations',
-      isValid: preview.isValid,
     });
     return preview;
   } catch (error) {
-    logger.error('Invitation preview by token failed', error, { table: 'group_invitations' });
+    logger.error('Get invitation preview failed', error, { table: 'group_invitations' });
     throw error;
   }
 }
@@ -860,6 +955,7 @@ export async function getInvitationByGroupMemberId(groupMemberId: string): Promi
       .from('group_invitations')
       .select('*')
       .eq('group_member_id', groupMemberId)
+      .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();

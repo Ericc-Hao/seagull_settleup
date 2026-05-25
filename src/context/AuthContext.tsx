@@ -28,7 +28,7 @@ interface AuthContextValue {
     email: string;
     password: string;
     displayName: string;
-    phone: string;
+    phone?: string;
     avatarUri?: string;
   }) => Promise<void>;
   signOut: () => Promise<void>;
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string;
     password: string;
     displayName: string;
-    phone: string;
+    phone?: string;
     avatarUri?: string;
   }) => {
     setLoading(true);

@@ -218,7 +218,11 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
         onResendInvitation={(invitationId) => {
           void memberActions
             .resendMemberInvitation(invitationId)
-            .then(closeMemberSheet)
+            .then((result) => {
+              if (result?.sent) {
+                closeMemberSheet();
+              }
+            })
             .catch(() => undefined);
         }}
       />

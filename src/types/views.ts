@@ -17,10 +17,14 @@ export interface PendingInvitationView {
 
 export interface InvitationPreviewView {
   invitationId: string;
+  token?: string;
+  groupId?: string;
   groupName: string;
   inviterName?: string;
   inviterEmail?: string;
   invitedEmail: string;
+  status: PendingInvitationView['status'];
+  expiresAt?: string | null;
   isValid: boolean;
 }
 

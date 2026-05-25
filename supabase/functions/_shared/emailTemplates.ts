@@ -15,11 +15,6 @@ export interface GroupInvitationEmail {
 const FONT_STACK =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
-const BRAND_MARK_SVG = `<svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" role="presentation">
-    <path d="M10 34C19 20 30 18 38 30C43 23 50 20 58 22C48 27 43 35 39 45C33 34 24 30 10 34Z" fill="#7B7FF6"/>
-    <path d="M14 36C24 33 32 36 38 46C31 44 22 42 14 36Z" fill="#AAC4FF"/>
-  </svg>`;
-
 function isUsableIconUrl(iconUrl?: string): boolean {
   const trimmed = iconUrl?.trim();
   return Boolean(trimmed && /^https:\/\/.+/i.test(trimmed));
@@ -27,7 +22,7 @@ function isUsableIconUrl(iconUrl?: string): boolean {
 
 function buildLogoMarkup(iconUrl?: string): string {
   const logoContainerStyle =
-    'display:inline-block;width:56px;height:56px;border-radius:18px;background-color:#FFFFFF;overflow:hidden;box-shadow:0 8px 22px rgba(80,90,160,0.12);';
+    'display:inline-block;width:56px;height:56px;border-radius:18px;background-color:#FFFFFF;overflow:hidden;box-shadow:0 8px 22px rgba(80,90,160,0.12);text-align:center;line-height:56px;';
 
   if (isUsableIconUrl(iconUrl)) {
     const safeIconUrl = escapeHtmlAttribute(iconUrl!.trim());
@@ -37,14 +32,19 @@ function buildLogoMarkup(iconUrl?: string): string {
         width="56"
         height="56"
         alt="Seagull Split"
-        style="display:block;width:56px;height:56px;border-radius:18px;object-fit:cover;border:0;"
+        border="0"
+        style="display:block;width:56px;height:56px;border:0;outline:none;text-decoration:none;border-radius:18px;"
       />
     </div>`;
   }
 
-  return `<div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:18px;background-color:#FFFFFF;box-shadow:0 8px 22px rgba(80,90,160,0.12);">
-      ${BRAND_MARK_SVG}
-    </div>`;
+  return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="${logoContainerStyle}">
+    <tr>
+      <td align="center" valign="middle" width="56" height="56" style="width:56px;height:56px;font-size:18px;font-weight:700;color:#53618A;font-family:${FONT_STACK};">
+        SS
+      </td>
+    </tr>
+  </table>`;
 }
 
 function buildBrandMarkHtml(iconUrl?: string): string {

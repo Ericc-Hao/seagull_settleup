@@ -27,6 +27,28 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function validateServiceRoleKey(key: string): void {
+  if (key.startsWith('re_')) {
+    console.error('Invalid SUPABASE_SERVICE_ROLE_KEY: this looks like a Resend API key (re_...).');
+    console.error('Use the Supabase service_role secret from Dashboard → Project Settings → API.');
+    process.exit(1);
+  }
+
+  if (key.startsWith('sb_publishable_')) {
+    console.error('Invalid SUPABASE_SERVICE_ROLE_KEY: this is the publishable key, not the service role key.');
+    console.error('Use the service_role secret from Dashboard → Project Settings → API.');
+    process.exit(1);
+  }
+
+  const looksLikeJwt = key.startsWith('eyJ');
+  const looksLikeSecretKey = key.startsWith('sb_secret_');
+  if (!looksLikeJwt && !looksLikeSecretKey) {
+    console.error('Invalid SUPABASE_SERVICE_ROLE_KEY format.');
+    console.error('Expected a JWT (eyJ...) or sb_secret_... key from Supabase Dashboard → Project Settings → API.');
+    process.exit(1);
+  }
+}
+
 async function verifyPublicUrl(publicUrl: string): Promise<void> {
   const response = await fetch(publicUrl, {
     method: 'GET',
@@ -48,6 +70,7 @@ async function main(): Promise<void> {
   }
 
   const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+  validateServiceRoleKey(serviceRoleKey);
   const iconBytes = readFileSync(LOCAL_ICON_PATH);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -64,6 +87,14 @@ async function main(): Promise<void> {
 
   if (error) {
     console.error('Upload failed:', error.message);
+    if (error.message.includes('Invalid Compact JWS') || error.message.includes('JWT')) {
+      console.error('');
+      console.error('The service role key is invalid. Common mistakes:');
+      console.error('- Using RESEND_API_KEY (re_...) instead of Supabase service_role');
+      console.error('- Using the publishable/anon key instead of service_role');
+      console.error('');
+      console.error('Get the correct key: Supabase Dashboard → Project Settings → API → service_role');
+    }
     console.error('Ensure the public-assets bucket exists. Run: npx supabase db push');
     process.exit(1);
   }

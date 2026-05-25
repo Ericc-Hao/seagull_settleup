@@ -48,9 +48,11 @@ Upload `assets/icon.png` to `public-assets/brand/icon.png`:
 
 ```bash
 SUPABASE_URL=https://yljcebabixdakgwsvqtm.supabase.co \
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key \
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_secret \
 npm run upload:email-icon
 ```
+
+Use the **Supabase service_role** secret from Dashboard → Project Settings → API. Do not use `RESEND_API_KEY` (`re_...`) or the publishable key (`sb_publishable_...`).
 
 This script is for developer/admin use only. Do not run it in the mobile app or expose the service role key in frontend code.
 
@@ -83,7 +85,7 @@ npx supabase functions deploy send-group-invitation
 
 Send a test group invitation and confirm the real icon appears in Gmail.
 
-If `EMAIL_ICON_URL` is missing or the public URL is unreachable, the email uses an inline SVG fallback instead of a blank logo square.
+If `EMAIL_ICON_URL` is missing, the email uses a text logo mark (`SS`). When the secret is set, the email renders the public icon URL in an `<img>` tag.
 
 ### Branding in the app
 

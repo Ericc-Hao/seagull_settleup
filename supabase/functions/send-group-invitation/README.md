@@ -34,7 +34,7 @@ npx supabase secrets set EMAIL_ICON_URL=https://yljcebabixdakgwsvqtm.supabase.co
 
 Confirm the public URL opens in a browser before sending test emails.
 
-If `EMAIL_ICON_URL` is missing or unreachable, the template falls back to an inline SVG mark (not an emoji or blank square).
+If `EMAIL_ICON_URL` is missing, the template falls back to a text logo mark (`SS`). If the secret is set, the email always uses an `<img>` tag with that public URL.
 
 5. Deploy the function:
 

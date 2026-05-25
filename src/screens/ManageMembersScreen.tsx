@@ -110,7 +110,14 @@ export function ManageMembersScreen({ groupId }: ManageMembersScreenProps) {
         onResendInvitation={
           isOwner
             ? (invitationId) => {
-                void memberActions.resendMemberInvitation(invitationId).then(() => setSelectedMember(null));
+                void memberActions
+                  .resendMemberInvitation(invitationId)
+                  .then((result) => {
+                    if (result?.sent) {
+                      setSelectedMember(null);
+                    }
+                  })
+                  .catch(() => undefined);
               }
             : undefined
         }

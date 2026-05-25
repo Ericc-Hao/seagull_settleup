@@ -46,29 +46,23 @@ function buildInviteLink(token: string): string {
   return `${normalizedBase}/register?invite=${encodeURIComponent(token)}`;
 }
 
-async function resolveEmailIconUrl(configuredUrl: string): Promise<string> {
+function resolveEmailIconUrl(configuredUrl: string): string {
   const trimmed = configuredUrl.trim();
   if (!trimmed || !/^https:\/\/.+/i.test(trimmed)) {
     return '';
   }
+  return trimmed;
+}
 
+async function checkEmailIconReachability(iconUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(trimmed, {
-      method: 'GET',
-      headers: { Range: 'bytes=0-0' },
-    });
-
-    if (response.ok || response.status === 206) {
-      return trimmed;
-    }
-
-    log('email_icon_url_unreachable', { status: response.status });
-    return '';
+    const response = await fetch(iconUrl, { method: 'GET' });
+    return response.ok;
   } catch (error) {
     log('email_icon_url_unreachable', {
       error: error instanceof Error ? error.message : 'unknown_error',
     });
-    return '';
+    return false;
   }
 }
 
@@ -161,9 +155,12 @@ Deno.serve(async (req) => {
 
     const configuredIconUrl = Deno.env.get('EMAIL_ICON_URL') ?? '';
     console.log('Email icon URL configured:', Boolean(configuredIconUrl.trim()));
-    const iconUrl = await resolveEmailIconUrl(configuredIconUrl);
+    const iconUrl = resolveEmailIconUrl(configuredIconUrl);
     const emailIconConfigured = configuredIconUrl.trim().length > 0;
-    const emailIconReachable = iconUrl.length > 0;
+    const emailIconReachable = iconUrl ? await checkEmailIconReachability(iconUrl) : false;
+    if (emailIconConfigured && iconUrl && !emailIconReachable) {
+      log('email_icon_url_unreachable', { configured: true });
+    }
 
     const email = buildGroupInvitationEmail({
       inviterNameOrEmail,

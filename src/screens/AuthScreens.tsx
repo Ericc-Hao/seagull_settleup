@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
@@ -7,6 +7,8 @@ import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'reac
 import { PrimaryButton, AppLogo, ScreenLayout, SecondaryButton } from '../components';
 import { InvitationContextCard } from '../components/invitations/InvitationContextCard';
 import { useAuth } from '../context/AuthContext';
+import { useInvitationPreview } from '../hooks/useInvitationPreview';
+import { useInviteRouteParam } from '../hooks/useInviteRouteParam';
 import { setPendingInviteToken } from '../lib/pendingInviteToken';
 import { colors, layout, radii, shadows, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
@@ -14,17 +16,6 @@ import { maskEmail } from '../utils/validation';
 import { safeBack } from '../utils/navigation';
 
 const authUiLogger = createLogger('AuthScreens');
-
-function resolveInviteParam(invite: string | string[] | undefined): string | undefined {
-  if (typeof invite === 'string' && invite.trim()) {
-    return invite.trim();
-  }
-  if (Array.isArray(invite)) {
-    const first = invite.find((value) => value.trim());
-    return first?.trim();
-  }
-  return undefined;
-}
 
 function authRoute(path: '/login' | '/register', inviteToken?: string) {
   return inviteToken ? { pathname: path, params: { invite: inviteToken } } : path;
@@ -70,22 +61,27 @@ function AuthInput({
   onChangeText,
   secureTextEntry = false,
   autoCapitalize = 'none',
+  disabled = false,
+  helperText,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   secureTextEntry?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  disabled?: boolean;
+  helperText?: string;
 }) {
   return (
     <View
       style={{
-        backgroundColor: colors.background,
+        backgroundColor: disabled ? colors.borderSubtle : colors.background,
         borderRadius: radii.lg,
         paddingHorizontal: spacing.md,
         paddingVertical: spacing.sm,
         borderWidth: 1,
         borderColor: colors.borderSubtle,
+        opacity: disabled ? 0.85 : 1,
       }}
     >
       <Text style={[typography.label, { marginBottom: 4 }]}>{label}</Text>
@@ -95,8 +91,13 @@ function AuthInput({
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
-        style={[typography.body, { padding: 0 }]}
+        editable={!disabled}
+        selectTextOnFocus={!disabled}
+        style={[typography.body, { padding: 0, color: disabled ? colors.textSecondary : colors.textPrimary }]}
       />
+      {helperText ? (
+        <Text style={[typography.caption, { color: colors.textTertiary, marginTop: 4 }]}>{helperText}</Text>
+      ) : null}
     </View>
   );
 }
@@ -203,17 +204,29 @@ export function WelcomeScreen() {
 
 export function LoginScreen() {
   const { signIn, error, clearError, loading } = useAuth();
-  const params = useLocalSearchParams<{ invite?: string | string[] }>();
-  const inviteToken = resolveInviteParam(params.invite);
+  const inviteToken = useInviteRouteParam();
+  const { preview, loading: previewLoading, fetchFailed } = useInvitationPreview(inviteToken);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+
+  useEffect(() => {
+    authUiLogger.info('Login screen invite token detected', {
+      hasInviteToken: Boolean(inviteToken),
+    });
+  }, [inviteToken]);
 
   useEffect(() => {
     if (inviteToken) {
       void setPendingInviteToken(inviteToken);
     }
   }, [inviteToken]);
+
+  useEffect(() => {
+    if (preview?.isValid && preview.invitedEmail) {
+      setEmail(preview.invitedEmail);
+    }
+  }, [preview?.invitedEmail, preview?.isValid]);
 
   const submit = async () => {
     clearError();
@@ -232,7 +245,12 @@ export function LoginScreen() {
 
   return (
     <AuthCard title="Welcome Back" subtitle="Log in to your Seagull Split account.">
-      <InvitationContextCard inviteToken={inviteToken} />
+      <InvitationContextCard
+        inviteToken={inviteToken}
+        preview={preview}
+        loading={previewLoading}
+        fetchFailed={fetchFailed}
+      />
       <AuthInput label="Email" value={email} onChangeText={setEmail} />
       <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
       <ErrorText message={validation ?? error} />
@@ -248,15 +266,22 @@ export function LoginScreen() {
 
 export function RegisterScreen() {
   const { signUp, error, clearError, loading } = useAuth();
-  const params = useLocalSearchParams<{ invite?: string | string[] }>();
-  const inviteToken = resolveInviteParam(params.invite);
+  const inviteToken = useInviteRouteParam();
+  const { preview, loading: previewLoading, fetchFailed, isPendingInvite } = useInvitationPreview(inviteToken);
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | undefined>();
   const [email, setEmail] = useState('');
+  const [emailLocked, setEmailLocked] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+
+  useEffect(() => {
+    authUiLogger.info('Register invite token detected', {
+      hasInviteToken: Boolean(inviteToken),
+    });
+  }, [inviteToken]);
 
   useEffect(() => {
     if (inviteToken) {
@@ -264,18 +289,31 @@ export function RegisterScreen() {
     }
   }, [inviteToken]);
 
+  useEffect(() => {
+    if (preview?.status === 'pending' && preview.invitedEmail) {
+      setEmail(preview.invitedEmail);
+      setEmailLocked(true);
+      authUiLogger.info('Email prefilled from invitation', {
+        email: maskEmail(preview.invitedEmail),
+      });
+      return;
+    }
+
+    if (!previewLoading) {
+      setEmailLocked(false);
+    }
+  }, [preview?.status, preview?.invitedEmail, previewLoading]);
+
   const submit = async () => {
     clearError();
+    const registrationEmail = emailLocked && preview?.invitedEmail ? preview.invitedEmail : email.trim();
+
     if (!displayName.trim()) {
       setValidation('Display name is required.');
       return;
     }
-    if (!email.trim()) {
+    if (!registrationEmail) {
       setValidation('Email is required.');
-      return;
-    }
-    if (!phone.trim()) {
-      setValidation('Phone number is required.');
       return;
     }
     if (password.length < 6) {
@@ -287,24 +325,47 @@ export function RegisterScreen() {
       return;
     }
     setValidation(null);
-    authUiLogger.info('Register submit started', { email: maskEmail(email) });
-    await signUp({ email, password, displayName, phone, avatarUri });
+
+    if (inviteToken && isPendingInvite) {
+      authUiLogger.info('Registration with invite started', { email: maskEmail(registrationEmail) });
+    } else {
+      authUiLogger.info('Register submit started', { email: maskEmail(registrationEmail) });
+    }
+
+    await signUp({
+      email: registrationEmail,
+      password,
+      displayName,
+      phone: phone.trim() || undefined,
+      avatarUri,
+    });
   };
 
   return (
     <AuthCard title="Create Account" subtitle="Start tracking and splitting in CAD.">
-      <InvitationContextCard inviteToken={inviteToken} />
+      <InvitationContextCard
+        inviteToken={inviteToken}
+        preview={preview}
+        loading={previewLoading}
+        fetchFailed={fetchFailed}
+      />
       <AvatarPicker uri={avatarUri} displayName={displayName} onPick={setAvatarUri} />
       <AuthInput label="Display Name" value={displayName} onChangeText={setDisplayName} autoCapitalize="words" />
-      <AuthInput label="Phone" value={phone} onChangeText={setPhone} />
-      <AuthInput label="Email" value={email} onChangeText={setEmail} />
+      <AuthInput
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        disabled={emailLocked}
+        helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
+      />
+      <AuthInput label="Phone (optional)" value={phone} onChangeText={setPhone} />
       <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
       <AuthInput label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
       <ErrorText message={validation ?? error} />
       <PrimaryButton
         label={loading ? 'Creating Account...' : 'Create Account'}
         onPress={() => void submit()}
-        disabled={loading}
+        disabled={loading || (Boolean(inviteToken) && previewLoading)}
       />
       <AuthLink
         text="Already have an account?"

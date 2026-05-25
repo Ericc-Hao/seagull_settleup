@@ -29,5 +29,8 @@ function createWebStorage(): AuthStorage {
   };
 }
 
-export const authStorage: AuthStorage =
-  Platform.OS === 'web' ? createWebStorage() : AsyncStorage;
+function isWebRuntime(): boolean {
+  return typeof Platform !== 'undefined' && Platform.OS === 'web';
+}
+
+export const authStorage: AuthStorage = isWebRuntime() ? createWebStorage() : AsyncStorage;

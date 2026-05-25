@@ -43,5 +43,8 @@
     "typecheck": "tsc --noEmit",
     "upload:email-icon": "npx tsx scripts/upload-email-icon.ts"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "uuid": "^11.1.0"
+  }
 }

@@ -1,5 +1,5 @@
-# Manually deploy Expo Web to GitHub Pages from the `web` branch.
-# 1. Push code to `web`, then run this workflow from GitHub Actions.
+# Manually deploy Expo Web to GitHub Pages from the `main` branch.
+# 1. Push code to `main`, then run this workflow from GitHub Actions.
 # 2. Build Expo Web (`npx expo export -p web`) into `dist/`.
 # 3. Upload `dist/` as the GitHub Pages artifact.
 # 4. Deploy the artifact to GitHub Pages (custom domain: split.seagullcoffee.ca).
@@ -27,11 +27,11 @@ jobs:
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
 
     steps:
-      # Only allow manual runs from the `web` branch.
-      - name: Ensure workflow runs from web branch
+      # Only allow manual runs from the `main` branch.
+      - name: Ensure workflow runs from main branch
         run: |
-          if [ "${{ github.ref_name }}" != "web" ]; then
-            echo "This workflow must be run from the web branch."
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            echo "This workflow must be run from the main branch."
             exit 1
           fi
 

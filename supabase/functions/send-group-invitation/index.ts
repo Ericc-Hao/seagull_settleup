@@ -1,9 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildInvitationEmail } from './email-template.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function inviteLinkFor(token: string): string {
+  return `seagullsplit://invite/${token}`;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -13,80 +18,129 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Missing Authorization header' }, 401);
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const { group_id, invitation_id } = await req.json();
-    if (!group_id || !invitation_id) {
-      return new Response(JSON.stringify({ error: 'group_id and invitation_id are required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const body = await req.json();
+    const invitationId = body.invitationId ?? body.invitation_id;
+    if (!invitationId) {
+      return jsonResponse({ error: 'invitationId is required' }, 400);
     }
 
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const { data: userData, error: userError } = await userClient.auth.getUser();
     if (userError || !userData.user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
-    const { data: group, error: groupError } = await supabase
+    const { data: invitation, error: invitationError } = await userClient
+      .from('group_invitations')
+      .select('id, group_id, invited_by, invited_email, message, token, status')
+      .eq('id', invitationId)
+      .single();
+
+    if (invitationError || !invitation) {
+      return jsonResponse({ error: 'Invitation not found' }, 404);
+    }
+
+    const { data: group, error: groupError } = await userClient
       .from('groups')
       .select('id, name, owner_id')
-      .eq('id', group_id)
+      .eq('id', invitation.group_id)
       .single();
 
-    if (groupError) {
-      throw groupError;
-    }
-
-    const { data: invitation, error: invitationError } = await supabase
-      .from('group_invitations')
-      .select('id, invited_by, invited_email, message, token')
-      .eq('id', invitation_id)
-      .eq('group_id', group_id)
-      .single();
-
-    if (invitationError) {
-      throw invitationError;
+    if (groupError || !group) {
+      return jsonResponse({ error: 'Group not found' }, 404);
     }
 
     const callerId = userData.user.id;
     if (group.owner_id !== callerId && invitation.invited_by !== callerId) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Forbidden' }, 403);
     }
 
-    // TODO: Integrate a server-side email provider (Resend, SendGrid, SMTP, etc.).
-    // Keep service-role secrets in the Edge Function environment only, never in the mobile app.
-    console.log('Group invitation email queued', {
+    const { data: inviterProfile } = await userClient
+      .from('profiles')
+      .select('display_name, email')
+      .eq('id', invitation.invited_by)
+      .maybeSingle();
+
+    const inviterName = inviterProfile?.display_name?.trim() || undefined;
+    const inviterEmail = inviterProfile?.email?.trim() || undefined;
+
+    const token = invitation.token ?? invitationId;
+    const inviteLink = inviteLinkFor(token);
+    const emailContent = buildInvitationEmail({
       groupName: group.name,
-      invitedEmail: invitation.invited_email,
-      message: invitation.message,
-      token: invitation.token,
+      inviterName,
+      inviterEmail,
+      inviteLink,
     });
 
-    return new Response(JSON.stringify({ sent: false, reason: 'email_provider_not_configured' }), {
-      status: 202,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') ?? 'Seagull Split <onboarding@resend.dev>';
+
+    if (!resendApiKey) {
+      await adminClient
+        .from('group_invitations')
+        .update({ email_error: 'RESEND_API_KEY is not configured' })
+        .eq('id', invitationId);
+
+      return jsonResponse({ sent: false, reason: 'email_provider_not_configured' }, 202);
+    }
+
+    const resendResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [invitation.invited_email],
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+      }),
     });
+
+    if (!resendResponse.ok) {
+      const errorText = await resendResponse.text();
+      await adminClient
+        .from('group_invitations')
+        .update({ email_error: errorText.slice(0, 500) })
+        .eq('id', invitationId);
+
+      return jsonResponse({ sent: false, error: errorText }, 502);
+    }
+
+    await adminClient
+      .from('group_invitations')
+      .update({
+        email_sent_at: new Date().toISOString(),
+        email_error: null,
+      })
+      .eq('id', invitationId);
+
+    return jsonResponse({ sent: true }, 200);
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse(
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      500,
+    );
   }
 });
+
+function jsonResponse(body: Record<string, unknown>, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}

@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -34,6 +34,23 @@ function InviteLinkListener() {
   return null;
 }
 
+function AuthenticatedShell({ children }: { children: ReactNode }) {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <>{children}</>;
+  }
+
+  return (
+    <AppDataProvider>
+      <NotificationsProvider>
+        <InviteTokenHandler />
+        {children}
+      </NotificationsProvider>
+    </AppDataProvider>
+  );
+}
+
 export default function RootLayout() {
   return (
     <SafeAreaProvider style={styles.root}>
@@ -49,35 +66,26 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { session, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return <AuthLoadingScreen />;
   }
 
-  if (!session) {
-    return (
-      <Stack screenOptions={stackScreenOptions}>
-        <Stack.Screen name="(auth)" />
-      </Stack>
-    );
-  }
-
   return (
-    <AppDataProvider>
-      <NotificationsProvider>
-        <InviteTokenHandler />
-        <Stack screenOptions={stackScreenOptions}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="notifications" />
-          <Stack.Screen name="create-group" options={modalStackScreenOptions} />
-          <Stack.Screen name="add-expense" options={modalStackScreenOptions} />
-          <Stack.Screen name="expense" />
-          <Stack.Screen name="edit-profile" options={modalStackScreenOptions} />
-          <Stack.Screen name="group/[groupId]" />
-        </Stack>
-      </NotificationsProvider>
-    </AppDataProvider>
+    <AuthenticatedShell>
+      <Stack screenOptions={stackScreenOptions}>
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="create-group" options={modalStackScreenOptions} />
+        <Stack.Screen name="add-expense" options={modalStackScreenOptions} />
+        <Stack.Screen name="expense" />
+        <Stack.Screen name="edit-profile" options={modalStackScreenOptions} />
+        <Stack.Screen name="group/[groupId]" />
+      </Stack>
+    </AuthenticatedShell>
   );
 }
 

@@ -101,7 +101,13 @@ Create a DNS CNAME record:
 
 Replace `USERNAME` with the GitHub username or organization that owns the repository.
 
-The deploy workflow writes `dist/CNAME` and `dist/.nojekyll` automatically.
+The deploy workflow writes `dist/CNAME`, `dist/.nojekyll`, and copies `dist/index.html` to `dist/404.html` so GitHub Pages serves the Expo app for deep links and unknown paths.
+
+### Web routing
+
+- Unauthenticated users are redirected to `/welcome` from `/`, protected tabs, and unknown routes.
+- Authenticated users are redirected to `/home` from `/` and public auth pages.
+- Invite links such as `/register?invite={token}` remain public and preserve the invitation flow.
 
 ### Build locally
 

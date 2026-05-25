@@ -50,6 +50,7 @@ jobs:
 
       - name: Add GitHub Pages files
         run: |
+          cp dist/index.html dist/404.html
           touch dist/.nojekyll
           echo "split.seagullcoffee.ca" > dist/CNAME
 

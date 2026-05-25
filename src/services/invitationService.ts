@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { GroupInvitationRow } from '../types/database';
 import type { CreateGroupInvitationInput } from '../types/inputs';
 import type { GroupInvitation, GroupMember } from '../types/models';
-import type { PendingInvitationView } from '../types/views';
+import type { InvitationPreviewView, PendingInvitationView } from '../types/views';
 import { createLogger } from '../utils/logger';
 import { formatInvitationNotificationBody } from '../utils/invitationCopy';
 import { hasDuplicateEmail, isValidEmail, maskEmail, normalizeEmail } from '../utils/validation';
@@ -624,6 +624,87 @@ export async function syncPendingInvitationsForCurrentUser(): Promise<PendingInv
 
 export async function getPendingInvitationsForCurrentUser(): Promise<PendingInvitationView[]> {
   return syncPendingInvitationsForCurrentUser();
+}
+
+export async function getInvitationPreviewByToken(token: string): Promise<InvitationPreviewView | null> {
+  const trimmedToken = token.trim();
+  if (!trimmedToken) {
+    return null;
+  }
+
+  logger.info('Invitation preview by token started', { table: 'group_invitations' });
+  try {
+    const { data, error } = await supabase.rpc('get_invitation_preview_by_token', {
+      invite_token: trimmedToken,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) {
+      logger.info('Invitation preview by token not found', { table: 'group_invitations' });
+      return null;
+    }
+
+    const preview: InvitationPreviewView = {
+      invitationId: row.invitation_id,
+      groupName: row.group_name?.trim() || 'this group',
+      inviterName: row.inviter_name?.trim() || undefined,
+      inviterEmail: row.inviter_email?.trim() || undefined,
+      invitedEmail: row.invited_email?.trim() || '',
+      isValid: Boolean(row.is_valid),
+    };
+
+    logger.info('Invitation preview by token succeeded', {
+      invitationId: preview.invitationId,
+      table: 'group_invitations',
+      isValid: preview.isValid,
+    });
+    return preview;
+  } catch (error) {
+    logger.error('Invitation preview by token failed', error, { table: 'group_invitations' });
+    throw error;
+  }
+}
+
+export async function getPendingInvitationByToken(token: string): Promise<PendingInvitationView | null> {
+  const trimmedToken = token.trim();
+  if (!trimmedToken) {
+    return null;
+  }
+
+  logger.info('Pending invitation by token started', { table: 'group_invitations' });
+  try {
+    await syncPendingInvitationsForCurrentUser();
+
+    const { data: row, error } = await supabase
+      .from('group_invitations')
+      .select('*')
+      .eq('token', trimmedToken)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+    if (!row) {
+      logger.info('Pending invitation by token not found', { table: 'group_invitations' });
+      return null;
+    }
+
+    const views = await enrichPendingInvitations([row]);
+    const invitation = views[0] ?? null;
+    logger.info('Pending invitation by token succeeded', {
+      invitationId: invitation?.id,
+      table: 'group_invitations',
+      status: invitation?.status,
+    });
+    return invitation;
+  } catch (error) {
+    logger.error('Pending invitation by token failed', error, { table: 'group_invitations' });
+    throw error;
+  }
 }
 
 export async function acceptInvitation(invitationId: string): Promise<AcceptInvitationResult> {

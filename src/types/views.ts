@@ -15,6 +15,15 @@ export interface PendingInvitationView {
   status: 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
 }
 
+export interface InvitationPreviewView {
+  invitationId: string;
+  groupName: string;
+  inviterName?: string;
+  inviterEmail?: string;
+  invitedEmail: string;
+  isValid: boolean;
+}
+
 export interface GroupMemberWithProfile {
   id: string;
   groupId: string;

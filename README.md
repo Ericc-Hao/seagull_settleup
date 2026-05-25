@@ -68,3 +68,75 @@ npx supabase functions deploy send-group-invitation
 
 - In-app UI uses `AppLogo` with the local `assets/icon.png`.
 - User avatars still use `UserAvatar` / profile photos / initials — not the app logo.
+
+## Web deployment (GitHub Pages)
+
+Production web URL: [https://split.seagullcoffee.ca](https://split.seagullcoffee.ca)
+
+### GitHub secrets
+
+Add these repository secrets for the web build workflow:
+
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+Do not add service role keys, Resend keys, or other private secrets to GitHub Actions for the web app build.
+
+### Enable GitHub Pages
+
+1. Open the repository on GitHub.
+2. Go to **Settings → Pages**.
+3. Set **Source** to **GitHub Actions**.
+4. Set **Custom domain** to `split.seagullcoffee.ca`.
+
+### Custom domain and DNS
+
+Custom domain: `split.seagullcoffee.ca`
+
+Create a DNS CNAME record:
+
+| Type | Host | Value |
+|------|------|-------|
+| CNAME | `split` | `USERNAME.github.io` |
+
+Replace `USERNAME` with the GitHub username or organization that owns the repository.
+
+The deploy workflow writes `dist/CNAME` and `dist/.nojekyll` automatically.
+
+### Build locally
+
+```bash
+npm run web:build
+npm run web:preview
+```
+
+The static export is written to `dist/`.
+
+### Manual deployment
+
+Deployment is manual only — it does not run on push to `main` or any other branch.
+
+1. Push code to the `web` branch.
+2. Go to **GitHub → Actions**.
+3. Select **Deploy Web to GitHub Pages**.
+4. Click **Run workflow**.
+5. Choose branch: **`web`**.
+6. Click **Run workflow**.
+7. Visit [https://split.seagullcoffee.ca](https://split.seagullcoffee.ca).
+
+If you run the workflow from any branch other than `web`, it fails with: *This workflow must be run from the web branch.*
+
+### Invitation email web links
+
+Set the public app URL used in invitation emails:
+
+```bash
+npx supabase secrets set PUBLIC_APP_URL=https://split.seagullcoffee.ca
+npx supabase functions deploy send-group-invitation
+```
+
+Invitation emails use:
+
+`https://split.seagullcoffee.ca/register?invite={token}`
+
+Email clients cannot load local `assets/icon.png`. The web app uses the local asset; emails use the public `EMAIL_ICON_URL` from Supabase Storage.

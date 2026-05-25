@@ -1,15 +1,38 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import '../global.css';
+import { InviteTokenHandler } from '../src/components/invitations/InviteTokenHandler';
 import { colors } from '../src/theme';
 import { AppDataProvider } from '../src/context/AppDataContext';
 import { NotificationsProvider } from '../src/context/NotificationsContext';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
+import { extractInviteTokenFromUrl, setPendingInviteToken } from '../src/lib/pendingInviteToken';
 import { modalStackScreenOptions, stackScreenOptions } from '../src/navigation/screenOptions';
 import { AuthLoadingScreen } from '../src/screens/AuthScreens';
+
+function InviteLinkListener() {
+  useEffect(() => {
+    const captureInviteToken = (url: string | null) => {
+      if (!url) {
+        return;
+      }
+      const token = extractInviteTokenFromUrl(url);
+      if (token) {
+        void setPendingInviteToken(token);
+      }
+    };
+
+    void Linking.getInitialURL().then(captureInviteToken);
+    const subscription = Linking.addEventListener('url', ({ url }) => captureInviteToken(url));
+    return () => subscription.remove();
+  }, []);
+
+  return null;
+}
 
 export default function RootLayout() {
   return (
@@ -17,6 +40,7 @@ export default function RootLayout() {
       <View style={styles.root}>
         <StatusBar style="dark" />
         <AuthProvider>
+          <InviteLinkListener />
           <RootNavigator />
         </AuthProvider>
       </View>
@@ -42,6 +66,7 @@ function RootNavigator() {
   return (
     <AppDataProvider>
       <NotificationsProvider>
+        <InviteTokenHandler />
         <Stack screenOptions={stackScreenOptions}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="notifications" />

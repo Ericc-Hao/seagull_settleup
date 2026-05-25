@@ -41,9 +41,9 @@ function buildInviterNameOrEmail(
 }
 
 function buildInviteLink(token: string): string {
-  const base = Deno.env.get('APP_DEEP_LINK_BASE') ?? 'seagullsplit://invite';
-  const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base;
-  return `${normalizedBase}/${token}`;
+  const publicAppUrl = Deno.env.get('PUBLIC_APP_URL') ?? 'https://split.seagullcoffee.ca';
+  const normalizedBase = publicAppUrl.endsWith('/') ? publicAppUrl.slice(0, -1) : publicAppUrl;
+  return `${normalizedBase}/register?invite=${encodeURIComponent(token)}`;
 }
 
 Deno.serve(async (req) => {

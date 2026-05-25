@@ -1,17 +1,34 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'react-native';
 
 import { PrimaryButton, AppLogo, ScreenLayout, SecondaryButton } from '../components';
+import { InvitationContextCard } from '../components/invitations/InvitationContextCard';
 import { useAuth } from '../context/AuthContext';
+import { setPendingInviteToken } from '../lib/pendingInviteToken';
 import { colors, layout, radii, shadows, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
 import { maskEmail } from '../utils/validation';
 import { safeBack } from '../utils/navigation';
 
 const authUiLogger = createLogger('AuthScreens');
+
+function resolveInviteParam(invite: string | string[] | undefined): string | undefined {
+  if (typeof invite === 'string' && invite.trim()) {
+    return invite.trim();
+  }
+  if (Array.isArray(invite)) {
+    const first = invite.find((value) => value.trim());
+    return first?.trim();
+  }
+  return undefined;
+}
+
+function authRoute(path: '/login' | '/register', inviteToken?: string) {
+  return inviteToken ? { pathname: path, params: { invite: inviteToken } } : path;
+}
 
 function AuthCard({
   title,
@@ -186,9 +203,17 @@ export function WelcomeScreen() {
 
 export function LoginScreen() {
   const { signIn, error, clearError, loading } = useAuth();
+  const params = useLocalSearchParams<{ invite?: string | string[] }>();
+  const inviteToken = resolveInviteParam(params.invite);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (inviteToken) {
+      void setPendingInviteToken(inviteToken);
+    }
+  }, [inviteToken]);
 
   const submit = async () => {
     clearError();
@@ -207,17 +232,24 @@ export function LoginScreen() {
 
   return (
     <AuthCard title="Welcome Back" subtitle="Log in to your Seagull Split account.">
+      <InvitationContextCard inviteToken={inviteToken} />
       <AuthInput label="Email" value={email} onChangeText={setEmail} />
       <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
       <ErrorText message={validation ?? error} />
       <PrimaryButton label={loading ? 'Logging In...' : 'Log In'} onPress={() => void submit()} disabled={loading} />
-      <AuthLink text="New here?" action="Create Account" onPress={() => router.push('/(auth)/register')} />
+      <AuthLink
+        text="New here?"
+        action="Create Account"
+        onPress={() => router.push(authRoute('/register', inviteToken))}
+      />
     </AuthCard>
   );
 }
 
 export function RegisterScreen() {
   const { signUp, error, clearError, loading } = useAuth();
+  const params = useLocalSearchParams<{ invite?: string | string[] }>();
+  const inviteToken = resolveInviteParam(params.invite);
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | undefined>();
@@ -225,6 +257,12 @@ export function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (inviteToken) {
+      void setPendingInviteToken(inviteToken);
+    }
+  }, [inviteToken]);
 
   const submit = async () => {
     clearError();
@@ -255,6 +293,7 @@ export function RegisterScreen() {
 
   return (
     <AuthCard title="Create Account" subtitle="Start tracking and splitting in CAD.">
+      <InvitationContextCard inviteToken={inviteToken} />
       <AvatarPicker uri={avatarUri} displayName={displayName} onPick={setAvatarUri} />
       <AuthInput label="Display Name" value={displayName} onChangeText={setDisplayName} autoCapitalize="words" />
       <AuthInput label="Phone" value={phone} onChangeText={setPhone} />
@@ -267,7 +306,11 @@ export function RegisterScreen() {
         onPress={() => void submit()}
         disabled={loading}
       />
-      <AuthLink text="Already have an account?" action="Log In" onPress={() => router.push('/(auth)/login')} />
+      <AuthLink
+        text="Already have an account?"
+        action="Log In"
+        onPress={() => router.push(authRoute('/login', inviteToken))}
+      />
     </AuthCard>
   );
 }

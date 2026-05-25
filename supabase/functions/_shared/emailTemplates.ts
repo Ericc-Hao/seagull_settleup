@@ -52,6 +52,8 @@ export function buildGroupInvitationEmail(params: GroupInvitationEmailParams): G
     '',
     `${inviterNameOrEmail} invited you to join "${groupName}".`,
     '',
+    'Create an account or log in with this email to accept the invitation.',
+    '',
     "After accepting, you'll be able to view shared expenses, add bills, track who paid, and settle balances with the group.",
     '',
     'Accept invitation:',
@@ -87,6 +89,9 @@ export function buildGroupInvitationEmail(params: GroupInvitationEmailParams): G
             <td style="padding:32px;">
               <p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#1F2740;">
                 ${escapeHtml(bodyLine)}
+              </p>
+              <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#53618A;">
+                Create an account or log in with this email to accept the invitation.
               </p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;background-color:#F7F8FF;border:1px solid #D2DAFF;border-radius:20px;">
                 <tr>
@@ -125,13 +130,10 @@ export function buildGroupInvitationEmail(params: GroupInvitationEmailParams): G
                 </tr>
               </table>
               <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#53618A;">
-                If the button does not work, open this link:
+                If the button does not work, copy and paste this link into your browser:
               </p>
-              <p style="margin:0 0 12px;font-size:13px;line-height:1.6;word-break:break-all;">
+              <p style="margin:0;font-size:13px;line-height:1.6;word-break:break-all;">
                 <a href="${escapeHtmlAttribute(inviteLink)}" target="_blank" rel="noopener noreferrer" style="color:#53618A;text-decoration:underline;">${escapeHtml(inviteLink)}</a>
-              </p>
-              <p style="margin:0;font-size:13px;line-height:1.6;color:#7080B0;">
-                If the button does not work, open Seagull Split and check your pending invitations.
               </p>
             </td>
           </tr>

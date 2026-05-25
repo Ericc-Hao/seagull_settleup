@@ -12,9 +12,13 @@ Sends group invitation emails through Resend when a member invites someone to a 
 ```bash
 npx supabase secrets set RESEND_API_KEY=YOUR_RESEND_API_KEY
 npx supabase secrets set RESEND_FROM_EMAIL="Seagull Split <no-reply@YOUR_VERIFIED_DOMAIN>"
-npx supabase secrets set APP_DEEP_LINK_BASE=seagullsplit://invite
+npx supabase secrets set PUBLIC_APP_URL=https://split.seagullcoffee.ca
 npx supabase secrets set EMAIL_ICON_URL=https://<project-ref>.supabase.co/storage/v1/object/public/public-assets/brand/icon.png
 ```
+
+Invitation accept links use:
+
+`https://split.seagullcoffee.ca/register?invite={token}`
 
 ### Email icon
 

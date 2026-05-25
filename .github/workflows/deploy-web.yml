@@ -1,9 +1,3 @@
-# Manually deploy Expo Web to GitHub Pages from the `web` branch.
-# 1. Push code to `web`, then run this workflow from GitHub Actions.
-# 2. Build Expo Web (`npx expo export -p web`) into `dist/`.
-# 3. Upload `dist/` as the GitHub Pages artifact.
-# 4. Deploy the artifact to GitHub Pages (custom domain: split.seagullcoffee.ca).
-
 name: Deploy Web to GitHub Pages
 
 on:
@@ -27,11 +21,10 @@ jobs:
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
 
     steps:
-      # Only allow manual runs from the `web` branch.
-      - name: Ensure workflow runs from web branch
+      - name: Ensure workflow runs from main branch
         run: |
-          if [ "${{ github.ref_name }}" != "web" ]; then
-            echo "This workflow must be run from the web branch."
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            echo "This workflow must be run from the main branch."
             exit 1
           fi
 
@@ -47,11 +40,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Build static Expo Web output into dist/.
       - name: Build Expo Web
         run: npx expo export -p web
 
-      # GitHub Pages needs .nojekyll; CNAME sets the custom domain.
+      - name: Verify Expo Web output
+        run: |
+          ls -la dist
+          test -f dist/index.html || (echo "dist/index.html not found. Expo web export failed or output path is wrong." && exit 1)
+
       - name: Add GitHub Pages files
         run: |
           touch dist/.nojekyll
@@ -60,7 +56,6 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      # Upload dist/ for the deploy job.
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

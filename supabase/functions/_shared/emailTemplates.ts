@@ -20,22 +20,38 @@ const BRAND_MARK_SVG = `<svg width="32" height="32" viewBox="0 0 64 64" fill="no
     <path d="M14 36C24 33 32 36 38 46C31 44 22 42 14 36Z" fill="#AAC4FF"/>
   </svg>`;
 
-function buildBrandMarkHtml(iconUrl?: string): string {
-  const trimmedIconUrl = iconUrl?.trim();
-  const markContent = trimmedIconUrl
-    ? `<img src="${escapeHtmlAttribute(trimmedIconUrl)}" width="56" height="56" alt="Seagull Split" style="display:block;width:56px;height:56px;border-radius:18px;object-fit:cover;border:0;" />`
-    : BRAND_MARK_SVG;
+function isUsableIconUrl(iconUrl?: string): boolean {
+  const trimmed = iconUrl?.trim();
+  return Boolean(trimmed && /^https:\/\/.+/i.test(trimmed));
+}
 
+function buildLogoMarkup(iconUrl?: string): string {
+  const logoContainerStyle =
+    'display:inline-block;width:56px;height:56px;border-radius:18px;background-color:#FFFFFF;overflow:hidden;box-shadow:0 8px 22px rgba(80,90,160,0.12);';
+
+  if (isUsableIconUrl(iconUrl)) {
+    const safeIconUrl = escapeHtmlAttribute(iconUrl!.trim());
+    return `<div style="${logoContainerStyle}">
+      <img
+        src="${safeIconUrl}"
+        width="56"
+        height="56"
+        alt="Seagull Split"
+        style="display:block;width:56px;height:56px;border-radius:18px;object-fit:cover;border:0;"
+      />
+    </div>`;
+  }
+
+  return `<div style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:18px;background-color:#FFFFFF;box-shadow:0 8px 22px rgba(80,90,160,0.12);">
+      ${BRAND_MARK_SVG}
+    </div>`;
+}
+
+function buildBrandMarkHtml(iconUrl?: string): string {
   return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px;">
   <tr>
     <td align="left" style="padding:0;">
-      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="56" height="56" style="width:56px;height:56px;border-radius:18px;background-color:#FFFFFF;overflow:hidden;box-shadow:0 8px 22px rgba(80,90,160,0.12);">
-        <tr>
-          <td align="center" valign="middle" width="56" height="56" style="width:56px;height:56px;border-radius:18px;line-height:0;font-size:0;overflow:hidden;">
-            ${markContent}
-          </td>
-        </tr>
-      </table>
+      ${buildLogoMarkup(iconUrl)}
     </td>
   </tr>
 </table>`;
@@ -166,3 +182,5 @@ function escapeHtml(value: string): string {
 function escapeHtmlAttribute(value: string): string {
   return escapeHtml(value);
 }
+
+export { buildLogoMarkup, isUsableIconUrl };

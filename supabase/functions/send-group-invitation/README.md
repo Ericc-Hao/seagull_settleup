@@ -13,7 +13,7 @@ Sends group invitation emails through Resend when a member invites someone to a 
 npx supabase secrets set RESEND_API_KEY=YOUR_RESEND_API_KEY
 npx supabase secrets set RESEND_FROM_EMAIL="Seagull Split <no-reply@YOUR_VERIFIED_DOMAIN>"
 npx supabase secrets set PUBLIC_APP_URL=https://split.seagullcoffee.ca
-npx supabase secrets set EMAIL_ICON_URL=https://<project-ref>.supabase.co/storage/v1/object/public/public-assets/brand/icon.png
+npx supabase secrets set EMAIL_ICON_URL=https://yljcebabixdakgwsvqtm.supabase.co/storage/v1/object/public/public-assets/brand/icon.png
 ```
 
 Invitation accept links use:
@@ -26,13 +26,15 @@ Email clients cannot load local `assets/icon.png`. Upload the icon to Supabase S
 
 ```bash
 npx supabase db push
-SUPABASE_URL=https://<project-ref>.supabase.co \
+SUPABASE_URL=https://yljcebabixdakgwsvqtm.supabase.co \
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key \
 npm run upload:email-icon
-npx supabase secrets set EMAIL_ICON_URL=<printed-public-url>
+npx supabase secrets set EMAIL_ICON_URL=https://yljcebabixdakgwsvqtm.supabase.co/storage/v1/object/public/public-assets/brand/icon.png
 ```
 
-If `EMAIL_ICON_URL` is not set, the template falls back to an inline SVG mark (not an emoji).
+Confirm the public URL opens in a browser before sending test emails.
+
+If `EMAIL_ICON_URL` is missing or unreachable, the template falls back to an inline SVG mark (not an emoji or blank square).
 
 5. Deploy the function:
 

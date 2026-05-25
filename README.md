@@ -32,37 +32,58 @@ See `.cursor/rules/logging.mdc` for the full project rule.
 
 Invitation emails load the app icon from a public HTTPS URL. Email clients cannot use local files such as `assets/icon.png`.
 
-### Upload the icon
+### 1. Create the public bucket
 
-1. Apply migrations so the `public-assets` bucket exists:
+Apply migrations so the `public-assets` bucket exists:
 
 ```bash
 npx supabase db push
 ```
 
-2. Upload `assets/icon.png` to Supabase Storage:
+Bucket name: `public-assets` (must be public)
+
+### 2. Upload the icon
+
+Upload `assets/icon.png` to `public-assets/brand/icon.png`:
 
 ```bash
-SUPABASE_URL=https://<project-ref>.supabase.co \
+SUPABASE_URL=https://yljcebabixdakgwsvqtm.supabase.co \
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key \
 npm run upload:email-icon
 ```
 
-Storage path: `public-assets/brand/icon.png`
+This script is for developer/admin use only. Do not run it in the mobile app or expose the service role key in frontend code.
 
-3. Set the Edge Function secret using the printed public URL:
+### 3. Confirm the public URL works
+
+Open this URL in a browser — it should display the app icon:
+
+https://yljcebabixdakgwsvqtm.supabase.co/storage/v1/object/public/public-assets/brand/icon.png
+
+If you get 404 or access denied:
+
+- Confirm the bucket name is exactly `public-assets`
+- Confirm the file path is exactly `brand/icon.png`
+- Confirm the bucket is public
+- Re-run the upload script
+
+### 4. Set the Edge Function secret
 
 ```bash
-npx supabase secrets set EMAIL_ICON_URL=https://<project-ref>.supabase.co/storage/v1/object/public/public-assets/brand/icon.png
+npx supabase secrets set EMAIL_ICON_URL=https://yljcebabixdakgwsvqtm.supabase.co/storage/v1/object/public/public-assets/brand/icon.png
 ```
 
-4. Redeploy the invitation email function:
+### 5. Redeploy the invitation email function
 
 ```bash
 npx supabase functions deploy send-group-invitation
 ```
 
-5. Send a test group invitation and confirm the real icon appears in the email.
+### 6. Send a test invitation
+
+Send a test group invitation and confirm the real icon appears in Gmail.
+
+If `EMAIL_ICON_URL` is missing or the public URL is unreachable, the email uses an inline SVG fallback instead of a blank logo square.
 
 ### Branding in the app
 

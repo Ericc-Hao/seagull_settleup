@@ -9,5 +9,5 @@ export default function SettleUpRoute() {
   if (!groupId) {
     return <Redirect href="/(tabs)/groups" />;
   }
-  return <SettleUpScreen groupId={groupId} />;
+  return <SettleUpScreen mode="group" groupId={groupId} />;
 }

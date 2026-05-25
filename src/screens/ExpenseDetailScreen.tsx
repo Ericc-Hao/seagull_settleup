@@ -1,15 +1,21 @@
 import { router } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { ScreenLayout, ScreenPageHeader, SectionCard, SectionTitle } from '../components';
 import { CategoryIconBadge } from '../components/expenses/CategoryIconBadge';
+import { ReceiptPreviewCard } from '../components/expenses/ReceiptPreviewCard';
+import { ReceiptViewerModal } from '../components/expenses/ReceiptViewerModal';
 import { UserAvatar } from '../components/common/UserAvatar';
 import { useAppData } from '../context/AppDataContext';
-import { getExpenseDetailView } from '../services/expenseService';
+import { getExpenseById, getExpenseDetail, getExpenseDetailView } from '../services/expenseService';
 import { colors, layout, spacing, typography } from '../theme';
+import type { ExpenseReceiptView } from '../types/views';
 import { formatDateForDisplay, parseSupabaseDate } from '../utils/date';
+import { createLogger } from '../utils/logger';
 import { safeBack } from '../utils/navigation';
+
+const logger = createLogger('ExpenseDetailScreen');
 
 interface ExpenseDetailScreenProps {
   expenseId: string;
@@ -17,8 +23,64 @@ interface ExpenseDetailScreenProps {
 
 export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
   const { version } = useAppData();
+  const [receipt, setReceipt] = useState<ExpenseReceiptView | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
 
   const detail = useMemo(() => getExpenseDetailView(expenseId), [expenseId, version]);
+  const expense = useMemo(() => getExpenseById(expenseId), [expenseId, version]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadReceipt = async () => {
+      if (!detail) {
+        setReceipt(null);
+        setReceiptLoading(false);
+        return;
+      }
+
+      const cachedReceipt = detail.receipt ?? null;
+      if (cachedReceipt) {
+        setReceipt(cachedReceipt);
+      }
+
+      const mayHaveReceipt = Boolean(expense?.receiptId || cachedReceipt);
+      if (!mayHaveReceipt) {
+        setReceipt(null);
+        setReceiptLoading(false);
+        return;
+      }
+
+      const hasDisplayUrl = Boolean(cachedReceipt?.displayUrl ?? cachedReceipt?.publicUrl);
+      setReceiptLoading(!hasDisplayUrl);
+      logger.info('Expense detail receipt load started', { expenseId, hasCachedReceipt: Boolean(cachedReceipt) });
+
+      try {
+        const result = await getExpenseDetail(expenseId);
+        if (!mounted) {
+          return;
+        }
+        setReceipt(result?.receipt ?? null);
+        logger.info('Expense detail receipt load succeeded', {
+          expenseId,
+          hasReceipt: Boolean(result?.receipt),
+        });
+      } catch (error) {
+        logger.error('Expense detail receipt load failed', error, { expenseId });
+      } finally {
+        if (mounted) {
+          setReceiptLoading(false);
+        }
+      }
+    };
+
+    void loadReceipt();
+
+    return () => {
+      mounted = false;
+    };
+  }, [expenseId, version, detail, expense?.receiptId]);
 
   if (!detail) {
     return (
@@ -38,6 +100,8 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
   }
 
   const dateLabel = formatDateForDisplay(parseSupabaseDate(detail.expenseDate.split('T')[0]));
+  const receiptUrl = receipt?.displayUrl ?? receipt?.publicUrl ?? null;
+  const showReceiptSection = receiptLoading || Boolean(receiptUrl);
 
   return (
     <ScreenLayout
@@ -104,6 +168,15 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
         </View>
       </SectionCard>
 
+      {showReceiptSection ? (
+        <ReceiptPreviewCard
+          receiptUrl={receiptUrl}
+          fileName={receipt?.fileName}
+          loading={receiptLoading}
+          onPress={receiptUrl ? () => setViewerVisible(true) : undefined}
+        />
+      ) : null}
+
       {detail.type === 'split' && detail.splits.length > 0 ? (
         <View style={{ gap: layout.cardGap }}>
           <SectionTitle title="Split between" />
@@ -143,6 +216,13 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
           View group
         </Text>
       ) : null}
+
+      <ReceiptViewerModal
+        visible={viewerVisible}
+        receiptUrl={receiptUrl}
+        fileName={receipt?.fileName}
+        onClose={() => setViewerVisible(false)}
+      />
     </ScreenLayout>
   );
 }

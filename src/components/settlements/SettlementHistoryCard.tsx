@@ -6,8 +6,10 @@ import { SettlementHistoryRow } from './SettlementHistoryRow';
 
 export function SettlementHistoryCard({
   items,
+  showGroupTag = false,
 }: {
   items: SettlementHistoryItemView[];
+  showGroupTag?: boolean;
 }) {
   if (items.length === 0) {
     return (
@@ -42,6 +44,7 @@ export function SettlementHistoryCard({
             key={item.id}
             item={item}
             showDivider={index < items.length - 1}
+            showGroupTag={showGroupTag}
           />
         ))}
       </View>

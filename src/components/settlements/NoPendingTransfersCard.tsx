@@ -3,7 +3,11 @@ import { Text, View } from 'react-native';
 import { colors, layout, spacing, typography } from '../../theme';
 import { Icon } from '../Icon';
 
-export function NoPendingTransfersCard() {
+export function NoPendingTransfersCard({ variant = 'group' }: { variant?: 'group' | 'global' }) {
+  const subtitle =
+    variant === 'global'
+      ? "You're all settled across your groups."
+      : "You're all settled for now. New shared expenses will appear here.";
   return (
     <View
       style={{
@@ -28,7 +32,7 @@ export function NoPendingTransfersCard() {
       </View>
       <Text style={[typography.bodyMedium, { textAlign: 'center' }]}>No pending transfers</Text>
       <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}>
-        You&apos;re all settled for now. New shared expenses will appear here.
+        {subtitle}
       </Text>
     </View>
   );

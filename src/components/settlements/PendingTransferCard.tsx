@@ -10,6 +10,7 @@ import { buildPaymentDetailsCopyText } from '../../utils/paymentCopy';
 import { copyText } from '../../utils/clipboard';
 import { createLogger } from '../../utils/logger';
 import { PaymentDetailsCard } from './PaymentDetailsCard';
+import { GroupTagPill } from './GroupTagPill';
 
 const logger = createLogger('PendingTransferCard');
 
@@ -17,10 +18,12 @@ export function PendingTransferCard({
   transfer,
   onMarkPaid,
   marking,
+  showGroupTag = false,
 }: {
   transfer: PendingTransferView;
   onMarkPaid: () => void;
   marking?: boolean;
+  showGroupTag?: boolean;
 }) {
   const paymentEmail = transfer.receiverTransferEmail ?? transfer.receiverEmail;
   const paymentMessage = transfer.paymentMessage;
@@ -41,6 +44,7 @@ export function PendingTransferCard({
       recipientPhone: transfer.receiverEmtPhone,
       amountLabel: transfer.amountDisplay,
       message: paymentMessage,
+      groupName: showGroupTag ? transfer.groupName : undefined,
     });
     const success = await copyText(text, 'all');
     if (success) {
@@ -68,9 +72,13 @@ export function PendingTransferCard({
         <Text style={[typography.sectionTitle, { fontSize: 28, lineHeight: 34 }]}>
           {transfer.amountDisplay}
         </Text>
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>
-          For group: {transfer.groupName}
-        </Text>
+        {showGroupTag && transfer.groupName ? (
+          <GroupTagPill groupName={transfer.groupName} />
+        ) : (
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>
+            For group: {transfer.groupName}
+          </Text>
+        )}
       </View>
 
       <View

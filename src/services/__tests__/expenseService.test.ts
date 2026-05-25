@@ -194,4 +194,30 @@ describe('getRecentGroupExpensesForCurrentUser', () => {
     expect(expenses[0].myShareAmountCents).toBe(0);
     expect(expenses[0].includedInSplit).toBe(false);
   });
+
+  it('marks not-included member expenses as settled with zero share', () => {
+    const now = new Date().toISOString();
+    setCache({
+      ...createExpenseFixture(),
+      groupMembers: [
+        ...createExpenseFixture().groupMembers,
+        {
+          id: 'member-third',
+          groupId: 'group-303',
+          userId: 'user-third',
+          displayName: 'Alex',
+          nickname: 'Alex',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    });
+    setCachedUserId('user-third');
+
+    const expenses = getRecentGroupExpensesForCurrentUser('group-303');
+    expect(expenses).toHaveLength(1);
+    expect(expenses[0].myShareAmountCents).toBe(0);
+    expect(expenses[0].includedInSplit).toBe(false);
+    expect(expenses[0].settlementStatus).toBe('settled');
+  });
 });

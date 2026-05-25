@@ -29,6 +29,7 @@ export function buildPaymentDetailsCopyText(input: {
   recipientPhone?: string;
   amountLabel: string;
   message: string;
+  groupName?: string;
 }): string {
   const lines = [`Recipient: ${input.recipientName}`];
 
@@ -40,6 +41,9 @@ export function buildPaymentDetailsCopyText(input: {
   }
 
   lines.push(`Amount: ${input.amountLabel}`);
+  if (input.groupName?.trim()) {
+    lines.push(`Group: ${input.groupName.trim()}`);
+  }
   lines.push(`Message: ${input.message}`);
   return lines.join('\n');
 }

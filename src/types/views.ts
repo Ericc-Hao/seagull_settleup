@@ -26,6 +26,7 @@ export interface InvitationPreviewView {
   status: PendingInvitationView['status'];
   expiresAt?: string | null;
   isValid: boolean;
+  inviteeHasAccount?: boolean;
 }
 
 export interface GroupMemberWithProfile {
@@ -159,6 +160,20 @@ export interface ExpenseDetailView {
   payerName?: string;
   expenseDate: string;
   splits: ExpenseSplitMemberView[];
+  receipt?: ExpenseReceiptView | null;
+}
+
+export interface ExpenseReceiptView {
+  id: string;
+  expenseId?: string;
+  storagePath?: string;
+  publicUrl?: string;
+  displayUrl?: string | null;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
+  ocrStatus?: 'none' | 'pending' | 'completed' | 'failed';
+  ocrText?: string;
 }
 
 export interface ExpenseListItemView {
@@ -204,6 +219,16 @@ export interface ProfileSectionView {
   }[];
 }
 
+export type CoveredBalanceRole = 'debtor' | 'creditor' | 'offset';
+
+export interface CoveredBalanceView {
+  memberId: string;
+  memberName: string;
+  balanceBeforeCents: number;
+  coveredAmountCents: number;
+  role: CoveredBalanceRole;
+}
+
 export interface PendingTransferView {
   id: string;
   groupId: string;
@@ -226,7 +251,30 @@ export interface PendingTransferView {
   groupName: string;
   paymentMessage: string;
   status: 'pending' | 'paid' | 'cancelled';
+  teamBalanceCents?: number;
+  selectedMemberIds?: string[];
+  selectedMemberNames?: string[];
+  coveredBalances?: CoveredBalanceView[];
+  explanation?: string;
+  paidByName?: string;
+  paidByMemberId?: string;
+  paidByUserId?: string;
+  requiresPayment?: boolean;
+  zeroPayment?: boolean;
 }
+
+export type TeamSettlementPreviewView = PendingTransferView & {
+  teamBalanceCents: number;
+  selectedMemberIds: string[];
+  selectedMemberNames: string[];
+  coveredBalances: CoveredBalanceView[];
+  explanation: string;
+  paidByName: string;
+  paidByMemberId: string;
+  paidByUserId: string;
+  requiresPayment: boolean;
+  zeroPayment: boolean;
+};
 export interface SettlementHistoryItemView {
   id: string;
   groupId: string;
@@ -241,6 +289,13 @@ export interface SettlementHistoryItemView {
   receiverEmail?: string;
   status: 'paid';
   summary: string;
+  historyTitle?: string;
+  detailLine?: string;
+  explanationLine?: string;
+  paidToLine?: string;
+  teamMemberNames?: string[];
+  isZeroPayment?: boolean;
+  groupName?: string;
 }
 
 /** @deprecated Use PendingTransferView */

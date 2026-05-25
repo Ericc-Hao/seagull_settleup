@@ -421,7 +421,9 @@ export async function createGroupInvitation(
   });
 
   try {
+    const invitedProfile = await findProfileByEmail(invitedEmail);
     const member = await upsertPendingMemberForInvite(input.groupId, invitedEmail);
+    const invitedUserId = invitedProfile?.id ?? member.userId ?? null;
 
     const { data: invitationRow, error: invitationError } = await supabase
       .from('group_invitations')
@@ -429,7 +431,7 @@ export async function createGroupInvitation(
         group_id: input.groupId,
         invited_by: input.invitedBy,
         invited_email: invitedEmail,
-        invited_user_id: member.userId ?? null,
+        invited_user_id: invitedUserId,
         group_member_id: member.id,
         status: 'pending',
         token: createInviteToken(),
@@ -449,6 +451,7 @@ export async function createGroupInvitation(
       groupId: input.groupId,
       invitationId: invitation.id,
       email: maskEmail(invitedEmail),
+      inviteeHasAccount: Boolean(invitedUserId),
     });
     return { member, invitation };
   } catch (error) {
@@ -710,6 +713,7 @@ export async function getInvitationPreviewByToken(token: string): Promise<Invita
         status?: InvitationPreviewView['status'];
         expiresAt?: string | null;
         isValid?: boolean;
+        inviteeHasAccount?: boolean;
       };
       preview?: {
         invitationId: string;
@@ -722,6 +726,7 @@ export async function getInvitationPreviewByToken(token: string): Promise<Invita
         status?: InvitationPreviewView['status'];
         expiresAt?: string | null;
         isValid?: boolean;
+        inviteeHasAccount?: boolean;
       };
     } | null;
 
@@ -750,12 +755,14 @@ export async function getInvitationPreviewByToken(token: string): Promise<Invita
       status: invitation.status ?? 'cancelled',
       expiresAt: invitation.expiresAt ?? null,
       isValid: Boolean(invitation.isValid),
+      inviteeHasAccount: Boolean(invitation.inviteeHasAccount),
     };
 
     logger.info('Get invitation preview succeeded', {
       hasInvitation: true,
       status: preview.status,
       invitationId: preview.invitationId,
+      inviteeHasAccount: preview.inviteeHasAccount,
     });
     return preview;
   } catch (error) {

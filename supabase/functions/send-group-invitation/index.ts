@@ -40,10 +40,33 @@ function buildInviterNameOrEmail(
   return 'Someone';
 }
 
-function buildInviteLink(token: string): string {
+function buildInviteLink(token: string, inviteeHasAccount: boolean): string {
   const publicAppUrl = Deno.env.get('PUBLIC_APP_URL') ?? 'https://split.seagullcoffee.ca';
   const normalizedBase = publicAppUrl.endsWith('/') ? publicAppUrl.slice(0, -1) : publicAppUrl;
-  return `${normalizedBase}/register?invite=${encodeURIComponent(token)}`;
+  const invitePath = inviteeHasAccount ? '/login' : '/register';
+  return `${normalizedBase}${invitePath}?invite=${encodeURIComponent(token)}`;
+}
+
+async function resolveInviteeHasAccount(
+  adminClient: ReturnType<typeof createClient>,
+  invitation: { invited_user_id: string | null; invited_email: string },
+): Promise<boolean> {
+  if (invitation.invited_user_id) {
+    return true;
+  }
+
+  const invitedEmail = invitation.invited_email?.trim().toLowerCase();
+  if (!invitedEmail) {
+    return false;
+  }
+
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('id')
+    .ilike('email', invitedEmail)
+    .maybeSingle();
+
+  return Boolean(profile?.id);
 }
 
 function resolveEmailIconUrl(configuredUrl: string): string {
@@ -100,7 +123,7 @@ Deno.serve(async (req) => {
 
     const { data: invitation, error: invitationError } = await userClient
       .from('group_invitations')
-      .select('id, group_id, invited_by, invited_email, token, status')
+      .select('id, group_id, invited_by, invited_email, invited_user_id, token, status')
       .eq('id', invitationId)
       .single();
 
@@ -151,7 +174,14 @@ Deno.serve(async (req) => {
       inviterProfile?.email,
     );
     const token = invitation.token ?? invitationId;
-    const inviteLink = buildInviteLink(token);
+    const inviteeHasAccount = await resolveInviteeHasAccount(adminClient, invitation);
+    const inviteLink = buildInviteLink(token, inviteeHasAccount);
+
+    log('invite_link_built', {
+      invitationId,
+      inviteeHasAccount,
+      invitePath: inviteeHasAccount ? 'login' : 'register',
+    });
 
     const configuredIconUrl = Deno.env.get('EMAIL_ICON_URL') ?? '';
     console.log('Email icon URL configured:', Boolean(configuredIconUrl.trim()));
@@ -168,6 +198,7 @@ Deno.serve(async (req) => {
       invitedEmail: invitation.invited_email,
       inviteLink,
       iconUrl,
+      inviteeHasAccount,
     });
 
     const resendApiKey = Deno.env.get('RESEND_API_KEY');

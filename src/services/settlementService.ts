@@ -8,7 +8,7 @@ import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import { mapSettlement } from '../lib/mappers';
 import type { GroupMember, Settlement, SettlementMode } from '../types/models';
-import type { GroupMemberWithProfile, GroupBalanceSummary, PendingTransferView, SettleUpView, SettlementHistoryItemView } from '../types/views';
+import type { GroupMemberWithProfile, GroupBalanceSummary, PendingTransferView, SettleUpView, SettlementHistoryItemView, TeamSettlementPreviewView, CoveredBalanceView } from '../types/views';
 import { formatDateForDisplay } from '../utils/date';
 import {
   buildMemberDisplayLabel,
@@ -52,11 +52,28 @@ interface CoreExpense {
   splits: { memberId: string; shareAmountCents: number }[];
 }
 
+interface CoveredBalanceRecord {
+  memberId: string;
+  memberName: string;
+  balanceBeforeCents: number;
+  coveredAmountCents: number;
+  role: 'debtor' | 'creditor' | 'offset';
+}
+
 interface SettlementTeamMeta {
   fromMemberIds?: string[];
   toMemberIds?: string[];
   fromLabel?: string;
   toLabel?: string;
+  teamMemberIds?: string[];
+  teamMemberNames?: string[];
+  settlementType?: string;
+  paidByUserId?: string;
+  paidByMemberId?: string;
+  paidByName?: string;
+  coveredBalances?: CoveredBalanceRecord[];
+  explanation?: string;
+  zeroPayment?: boolean;
 }
 
 export async function getSettlements(groupId?: string): Promise<Settlement[]> {
@@ -191,6 +208,10 @@ function toCoreExpenses(groupId: string): CoreExpense[] {
 }
 
 function parseSettlementMeta(settlement: Settlement): SettlementTeamMeta | null {
+  const metadata = settlement.metadata;
+  if (metadata && typeof metadata === 'object' && Object.keys(metadata).length > 0) {
+    return metadata as SettlementTeamMeta;
+  }
   if (!settlement.note) {
     return null;
   }
@@ -268,7 +289,49 @@ function applyPaidSettlementToBalances(
   }
 
   const meta = parseSettlementMeta(settlement);
-  let fromMemberIds = meta?.fromMemberIds ?? [];
+
+  if (settlement.mode === 'team' && (meta?.zeroPayment === true || settlement.amountCents === 0)) {
+    logger.info('Apply zero-payment team settlement skipped balance changes', {
+      settlementId: settlement.id,
+    });
+    return;
+  }
+
+  if (meta?.coveredBalances && meta.coveredBalances.length > 0) {
+    logger.info('Apply paid team settlement started', {
+      settlementId: settlement.id,
+      coveredCount: meta.coveredBalances.length,
+    });
+
+    for (const covered of meta.coveredBalances) {
+      if (covered.coveredAmountCents <= 0) {
+        continue;
+      }
+      if (covered.role === 'debtor') {
+        balances.set(
+          covered.memberId,
+          (balances.get(covered.memberId) ?? 0) + covered.coveredAmountCents,
+        );
+      } else if (covered.role === 'creditor' || covered.role === 'offset') {
+        balances.set(
+          covered.memberId,
+          (balances.get(covered.memberId) ?? 0) - covered.coveredAmountCents,
+        );
+      }
+    }
+
+    if (settlement.toMemberId) {
+      balances.set(
+        settlement.toMemberId,
+        (balances.get(settlement.toMemberId) ?? 0) - settlement.amountCents,
+      );
+    }
+
+    logger.info('Apply paid team settlement succeeded', { settlementId: settlement.id });
+    return;
+  }
+
+  let fromMemberIds = meta?.teamMemberIds ?? meta?.fromMemberIds ?? [];
   let toMemberIds = meta?.toMemberIds ?? [];
 
   if (fromMemberIds.length === 0 && settlement.fromTeamId) {
@@ -545,14 +608,159 @@ function calculateVirtualTeamBalances(
   return Array.from(teamBalanceMap.entries()).map(([id, balanceCents]) => ({ id, balanceCents }));
 }
 
-export function calculateTeamPendingTransfersForCurrentUser(
+export function computeTeamCoveredBalances(
+  selectedMemberIds: string[],
+  memberMap: Map<string, SettlementMemberInfo>,
+  balancesBefore: Map<string, number>,
+): { coveredBalances: CoveredBalanceView[]; teamBalanceCents: number } {
+  const teamBalanceCents = selectedMemberIds.reduce(
+    (sum, memberId) => sum + (balancesBefore.get(memberId) ?? 0),
+    0,
+  );
+
+  const coveredBalances: CoveredBalanceView[] = selectedMemberIds.map((memberId) => {
+    const balanceBeforeCents = balancesBefore.get(memberId) ?? 0;
+    const memberName = memberMap.get(memberId)?.displayName ?? 'Member';
+
+    if (balanceBeforeCents < 0) {
+      return {
+        memberId,
+        memberName,
+        balanceBeforeCents,
+        coveredAmountCents: Math.abs(balanceBeforeCents),
+        role: 'debtor' as const,
+      };
+    }
+
+    if (balanceBeforeCents > 0) {
+      return {
+        memberId,
+        memberName,
+        balanceBeforeCents,
+        coveredAmountCents: balanceBeforeCents,
+        role: 'creditor' as const,
+      };
+    }
+
+    return {
+      memberId,
+      memberName,
+      balanceBeforeCents: 0,
+      coveredAmountCents: 0,
+      role: 'offset' as const,
+    };
+  });
+
+  logger.info('Covered balances generated', {
+    count: coveredBalances.length,
+    teamBalanceCents,
+  });
+
+  return { coveredBalances, teamBalanceCents };
+}
+
+function buildTeamSettlementExplanation(
+  paidByName: string,
+  selectedMemberNames: string[],
+  coveredBalances: CoveredBalanceView[],
+  amountCents: number,
+  receiverName: string,
+  teamBalanceCents: number,
+): string {
+  const teamLabel = selectedMemberNames.join(' and ');
+  const amountDisplay = formatCAD(amountCents, { includeSuffix: true });
+
+  if (amountCents > 0) {
+    const coveredDebtors = coveredBalances.filter(
+      (entry) => entry.role === 'debtor' && entry.coveredAmountCents > 0 && entry.memberName !== paidByName,
+    );
+    let explanation = `${paidByName} will pay ${amountDisplay} on behalf of ${teamLabel}.`;
+    if (coveredDebtors.length > 0) {
+      const names = coveredDebtors.map((entry) => entry.memberName).join(' and ');
+      explanation += ` This includes ${names}'s pending balance, so they will not need to settle this amount separately.`;
+    }
+    if (teamBalanceCents < 0 && coveredBalances.some((entry) => entry.role === 'creditor')) {
+      explanation += ` This combines receivables and debts within the selected team.`;
+    }
+    explanation += ` Payment goes to ${receiverName}.`;
+    return explanation;
+  }
+
+  if (teamBalanceCents === 0) {
+    return `${teamLabel} are settled together for this group. Confirming will record this team settlement.`;
+  }
+
+  if (teamBalanceCents > 0) {
+    return `${teamLabel} are already balanced together. Confirming will record that this team settlement is complete.`;
+  }
+
+  return `${teamLabel} team settlement confirmation.`;
+}
+
+function buildTeamPaymentMessage(
+  groupName: string,
+  teamMemberNames: string[],
+  recipientName: string,
+): string {
+  const teamLabel = teamMemberNames.join(' + ');
+  return `${groupName} team settlement - ${teamLabel} to ${recipientName}`;
+}
+
+function buildZeroTeamSettlementPreview(
+  groupId: string,
+  normalizedSelection: string[],
+  selectedMemberNames: string[],
+  coveredBalances: CoveredBalanceView[],
+  teamBalanceCents: number,
+  explanation: string,
+  paidByName: string,
+  currentMemberId: string,
+  userId: string,
+  memberMap: Map<string, SettlementMemberInfo>,
+): TeamSettlementPreviewView {
+  const db = readDb();
+  const group = getGroupOrThrow(groupId, db);
+  const fromLabel = buildTeamDisplayLabel(normalizedSelection, memberMap);
+
+  return {
+    id: `transfer-${groupId}-team-zero-${normalizedSelection.join('-')}`,
+    groupId,
+    mode: 'team',
+    fromMemberId: currentMemberId,
+    fromMemberIds: normalizedSelection,
+    toMemberIds: [],
+    fromLabel,
+    toLabel: '',
+    amountCents: 0,
+    amountDisplay: formatCAD(0, { includeSuffix: true }),
+    currency: 'CAD',
+    receiverName: '',
+    groupName: group.name,
+    paymentMessage: '',
+    status: 'pending',
+    teamBalanceCents,
+    selectedMemberIds: normalizedSelection,
+    selectedMemberNames,
+    coveredBalances,
+    explanation,
+    paidByName,
+    paidByMemberId: currentMemberId,
+    paidByUserId: userId,
+    requiresPayment: false,
+    zeroPayment: true,
+  };
+}
+
+export function calculateTeamSettlementPreview(
   groupId: string,
   selectedMemberIds: string[],
   userId: string = getCurrentUserId(),
-): PendingTransferView[] {
+): TeamSettlementPreviewView | null {
+  logger.info('Team settlement preview started', { groupId, memberCount: selectedMemberIds.length });
+
   const currentMemberId = getCurrentMemberId(groupId, userId);
   if (!currentMemberId) {
-    return [];
+    return null;
   }
 
   const normalizedSelection = [...new Set([...selectedMemberIds, currentMemberId])];
@@ -562,28 +770,144 @@ export function calculateTeamPendingTransfersForCurrentUser(
   const adjustedBalances = applyPaidSettlements(groupId, rawBalances);
   const balanceMap = new Map(adjustedBalances.map((entry) => [entry.memberId, entry.balanceCents]));
 
-  const { memberToTeam, teamMembers } = buildTemporaryTeamMapping(
-    members,
+  const { coveredBalances, teamBalanceCents } = computeTeamCoveredBalances(
     normalizedSelection,
-    currentMemberId,
+    memberMap,
+    balanceMap,
   );
-  const teamBalanceEntries = calculateVirtualTeamBalances(adjustedBalances, memberToTeam);
-  const transfers = optimizeTransfers(teamBalanceEntries);
 
-  const outgoing = transfers
-    .filter((transfer) => transfer.fromId === USER_SETTLE_TEAM_ID)
-    .map((transfer, index) =>
-      buildTeamTransferView(groupId, transfer, memberMap, teamMembers, balanceMap, index),
+  const selectedMemberNames = normalizedSelection.map(
+    (memberId) => memberMap.get(memberId)?.displayName ?? 'Member',
+  );
+  const paidByName = memberMap.get(currentMemberId)?.displayName ?? 'Member';
+  const db = readDb();
+  const group = getGroupOrThrow(groupId, db);
+
+  let paymentTransfer: PendingTransferView | null = null;
+
+  if (teamBalanceCents < 0) {
+    const { memberToTeam, teamMembers } = buildTemporaryTeamMapping(
+      members,
+      normalizedSelection,
+      currentMemberId,
     );
+    const teamBalanceEntries = calculateVirtualTeamBalances(adjustedBalances, memberToTeam);
+    const transfers = optimizeTransfers(teamBalanceEntries);
+
+    const outgoing = transfers
+      .filter((transfer) => transfer.fromId === USER_SETTLE_TEAM_ID)
+      .map((transfer, index) =>
+        buildTeamTransferView(groupId, transfer, memberMap, teamMembers, balanceMap, index),
+      );
+
+    paymentTransfer = outgoing[0] ?? null;
+  }
+
+  const amountCents = paymentTransfer?.amountCents ?? 0;
+  const requiresPayment = amountCents > 0;
+  const zeroPayment = !requiresPayment;
+
+  logger.info('Team settlement requires payment', { groupId, requiresPayment, teamBalanceCents });
+
+  if (zeroPayment) {
+    const explanation = buildTeamSettlementExplanation(
+      paidByName,
+      selectedMemberNames,
+      coveredBalances,
+      0,
+      '',
+      teamBalanceCents,
+    );
+
+    logger.info('Team settlement preview succeeded', {
+      groupId,
+      hasTransfer: false,
+      teamBalanceCents,
+      requiresPayment: false,
+    });
+
+    return buildZeroTeamSettlementPreview(
+      groupId,
+      normalizedSelection,
+      selectedMemberNames,
+      coveredBalances,
+      teamBalanceCents,
+      explanation,
+      paidByName,
+      currentMemberId,
+      userId,
+      memberMap,
+    );
+  }
+
+  if (!paymentTransfer) {
+    logger.info('Team settlement preview succeeded', { groupId, hasTransfer: false, teamBalanceCents });
+    return null;
+  }
+
+  const explanation = buildTeamSettlementExplanation(
+    paidByName,
+    selectedMemberNames,
+    coveredBalances,
+    paymentTransfer.amountCents,
+    paymentTransfer.receiverName,
+    teamBalanceCents,
+  );
+
+  const paymentMessage = buildTeamPaymentMessage(
+    group.name,
+    selectedMemberNames,
+    paymentTransfer.receiverName,
+  );
+
+  logger.info('Team settlement preview succeeded', {
+    groupId,
+    hasTransfer: true,
+    amountCents: paymentTransfer.amountCents,
+    teamBalanceCents,
+    requiresPayment: true,
+  });
+
+  return {
+    ...paymentTransfer,
+    paymentMessage,
+    teamBalanceCents,
+    selectedMemberIds: normalizedSelection,
+    selectedMemberNames,
+    coveredBalances,
+    explanation,
+    paidByName,
+    paidByMemberId: currentMemberId,
+    paidByUserId: userId,
+    requiresPayment: true,
+    zeroPayment: false,
+  };
+}
+
+export function calculateTeamPendingTransfersForCurrentUser(
+  groupId: string,
+  selectedMemberIds: string[],
+  userId: string = getCurrentUserId(),
+): PendingTransferView[] {
+  const preview = calculateTeamSettlementPreview(groupId, selectedMemberIds, userId);
+  if (!preview) {
+    logger.info('Current user outgoing transfers filtered', {
+      groupId,
+      mode: 'team',
+      count: 0,
+      teamSize: selectedMemberIds.length,
+    });
+    return [];
+  }
 
   logger.info('Current user outgoing transfers filtered', {
     groupId,
     mode: 'team',
-    count: outgoing.length,
-    teamSize: normalizedSelection.length,
+    count: 1,
+    teamSize: preview.selectedMemberIds.length,
   });
 
-  return outgoing;
+  return [preview];
 }
 
 /** @deprecated Use calculateIndividualPendingTransfersForCurrentUser */
@@ -723,6 +1047,125 @@ export async function markTransferAsPaid(
   }
 }
 
+export interface MarkTeamTransferAsPaidInput {
+  groupId: string;
+  transfer: PendingTransferView;
+  selectedMemberIds: string[];
+  selectedMemberNames: string[];
+}
+
+export async function markTeamTransferAsPaid(input: MarkTeamTransferAsPaidInput): Promise<void> {
+  const { groupId, transfer, selectedMemberIds, selectedMemberNames } = input;
+  logger.info('Team settlement marked paid started', {
+    table: 'settlements',
+    groupId,
+    memberCount: selectedMemberIds.length,
+  });
+
+  try {
+    const userId = getCurrentUserId();
+    const currentMemberId = getCurrentMemberId(groupId, userId);
+    if (!currentMemberId) {
+      throw new Error('You must be a group member to mark a transfer as paid.');
+    }
+
+    const isZeroPayment = transfer.zeroPayment ?? transfer.amountCents === 0;
+
+    if (!isZeroPayment && !transfer.fromMemberIds?.includes(currentMemberId)) {
+      throw new Error('You can only mark your own outgoing team transfers as paid.');
+    }
+
+    const normalizedSelection = [...new Set([...selectedMemberIds, currentMemberId])];
+    if (isZeroPayment && !normalizedSelection.includes(currentMemberId)) {
+      throw new Error('You must be included in the team settlement.');
+    }
+
+    const memberMap = buildMemberMap(groupId);
+    const paidByName = transfer.paidByName ?? memberMap.get(currentMemberId)?.displayName ?? 'Member';
+    const coveredBalances =
+      transfer.coveredBalances ??
+      computeTeamCoveredBalances(
+        normalizedSelection,
+        memberMap,
+        new Map(
+          applyPaidSettlements(groupId, calculateGroupBalances(groupId)).map((entry) => [
+            entry.memberId,
+            entry.balanceCents,
+          ]),
+        ),
+      ).coveredBalances;
+
+    const explanation =
+      transfer.explanation ??
+      buildTeamSettlementExplanation(
+        paidByName,
+        selectedMemberNames,
+        coveredBalances,
+        transfer.amountCents,
+        transfer.receiverName,
+        transfer.teamBalanceCents ?? 0,
+      );
+
+    const fromMemberIds = isZeroPayment ? normalizedSelection : transfer.fromMemberIds ?? normalizedSelection;
+    const fromLabel = isZeroPayment
+      ? buildTeamDisplayLabel(fromMemberIds, memberMap)
+      : transfer.fromLabel;
+
+    const note = JSON.stringify({
+      fromMemberIds,
+      toMemberIds: transfer.toMemberIds,
+      fromLabel,
+      toLabel: transfer.toLabel,
+    });
+
+    const metadata: SettlementTeamMeta = {
+      teamMemberIds: normalizedSelection,
+      teamMemberNames: selectedMemberNames,
+      settlementType: 'temporary_team',
+      paidByUserId: userId,
+      paidByMemberId: currentMemberId,
+      paidByName,
+      coveredBalances,
+      explanation,
+      zeroPayment: isZeroPayment,
+      fromMemberIds,
+      toMemberIds: transfer.toMemberIds,
+      fromLabel,
+      toLabel: transfer.toLabel,
+    };
+
+    const { error: settlementError } = await supabase.from('settlements').insert({
+      group_id: groupId,
+      mode: 'team',
+      from_member_id: currentMemberId,
+      to_member_id: isZeroPayment ? null : transfer.toMemberId ?? transfer.toMemberIds?.[0] ?? null,
+      from_team_id: null,
+      to_team_id: null,
+      amount_cents: transfer.amountCents,
+      currency: transfer.currency ?? 'CAD',
+      status: 'paid',
+      paid_at: new Date().toISOString(),
+      note,
+      metadata,
+    });
+
+    if (settlementError) {
+      throw settlementError;
+    }
+
+    await refreshCache();
+    if (isZeroPayment) {
+      logger.info('Zero-payment team settlement confirmed', { table: 'settlements', groupId });
+    } else {
+      logger.info('Paid team settlement confirmed', { table: 'settlements', groupId });
+    }
+    logger.info('Team settlement history created', { table: 'settlements', groupId, zeroPayment: isZeroPayment });
+  } catch (error) {
+    logger.error('Team settlement marked paid failed', error, { table: 'settlements', groupId });
+    throw error;
+  }
+}
+
 /** @deprecated Use markTransferAsPaid */
 export async function markTransferPaid(
   groupId: string,
@@ -741,6 +1184,7 @@ export function getDefaultSettleGroupId(userId: string = getCachedUserId()): str
 export function getSettlementHistory(groupId: string): SettlementHistoryItemView[] {
   logger.info('Settlement history fetch started', { groupId });
   const db = readDb();
+  const groupName = getGroupOrThrow(groupId, db).name;
   const memberMap = buildMemberMap(groupId, db);
 
   const history = db.settlements
@@ -756,6 +1200,7 @@ export function getSettlementHistory(groupId: string): SettlementHistoryItemView
 
       if (settlement.mode === 'team') {
         const fromMemberIds =
+          meta?.teamMemberIds ??
           meta?.fromMemberIds ??
           (settlement.fromTeamId
             ? db.teamMembers
@@ -775,9 +1220,50 @@ export function getSettlementHistory(groupId: string): SettlementHistoryItemView
               : []);
         const fromLabel = meta?.fromLabel ?? buildTeamDisplayLabel(fromMemberIds, memberMap);
         const toLabel = meta?.toLabel ?? buildTeamDisplayLabel(toMemberIds, memberMap);
+        const teamMemberNames =
+          meta?.teamMemberNames ??
+          fromMemberIds
+            .map((memberId) => memberMap.get(memberId)?.displayName)
+            .filter((name): name is string => Boolean(name?.trim()));
+        const teamLabel =
+          teamMemberNames.length > 0 ? teamMemberNames.join(' + ') : fromLabel;
         const receiver =
           (settlement.toMemberId ? memberMap.get(settlement.toMemberId) : undefined) ??
           (toMemberIds[0] ? memberMap.get(toMemberIds[0]) : undefined);
+        const receiverName = receiver?.displayName ?? toLabel;
+        const paidByName =
+          meta?.paidByName ??
+          (settlement.fromMemberId ? memberMap.get(settlement.fromMemberId)?.displayName : undefined) ??
+          'Member';
+        const isZeroPayment = meta?.zeroPayment === true || settlement.amountCents === 0;
+
+        if (isZeroPayment) {
+          return {
+            id: settlement.id,
+            groupId,
+            mode: 'team' as const,
+            amountCents: settlement.amountCents,
+            amountDisplay,
+            paidAt,
+            paidAtLabel: formatPaidDateLabel(paidAt),
+            fromLabel,
+            toLabel,
+            receiverName: receiverName || teamLabel,
+            receiverEmail: receiver?.transferEmail ?? receiver?.email,
+            status: 'paid' as const,
+            summary: 'Team settlement confirmed',
+            historyTitle: 'Team settlement confirmed',
+            detailLine: `${teamLabel} settled together`,
+            explanationLine: meta?.explanation,
+            teamMemberNames,
+            isZeroPayment: true,
+            groupName,
+          };
+        }
+
+        const explanationLine =
+          meta?.explanation ?? `${paidByName} paid on behalf of ${teamLabel}`;
+        const paidToLine = receiverName ? `Paid to ${receiverName}` : undefined;
 
         return {
           id: settlement.id,
@@ -789,10 +1275,17 @@ export function getSettlementHistory(groupId: string): SettlementHistoryItemView
           paidAtLabel: formatPaidDateLabel(paidAt),
           fromLabel,
           toLabel,
-          receiverName: receiver?.displayName ?? toLabel,
+          receiverName,
           receiverEmail: receiver?.transferEmail ?? receiver?.email,
           status: 'paid' as const,
-          summary: `Settled as Team: ${fromLabel} paid ${toLabel} ${amountDisplay}`,
+          summary: 'Team settlement',
+          historyTitle: 'Team settlement',
+          detailLine: `${paidByName} paid on behalf of ${teamLabel}`,
+          explanationLine,
+          paidToLine,
+          teamMemberNames,
+          isZeroPayment: false,
+          groupName,
         };
       }
 
@@ -813,11 +1306,118 @@ export function getSettlementHistory(groupId: string): SettlementHistoryItemView
         receiverName,
         receiverEmail: toInfo?.transferEmail ?? toInfo?.email,
         status: 'paid' as const,
-        summary: `Paid ${receiverName} ${amountDisplay}`,
+        summary: `Paid ${receiverName}`,
+        historyTitle: `Paid ${receiverName}`,
+        detailLine: 'Individual · Settled',
+        groupName,
       };
     });
 
   logger.info('Settlement history fetch succeeded', { groupId, count: history.length });
+  return history;
+}
+
+function getAccessibleGroupsForUser(userId: string = getCurrentUserId()): { id: string; name: string }[] {
+  const db = readDb();
+  return db.groups
+    .filter((group) => {
+      if (group.ownerId === userId) {
+        return true;
+      }
+      const member = findMemberForUser(group.id, userId, db);
+      if (!member || member.isActive === false) {
+        return false;
+      }
+      if (
+        member.invitationStatus === 'pending' ||
+        member.invitationStatus === 'declined' ||
+        member.invitationStatus === 'removed'
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .map((group) => ({ id: group.id, name: group.name }));
+}
+
+function isSettlementRelevantToUser(
+  settlement: Settlement,
+  groupId: string,
+  userId: string,
+  db = readDb(),
+): boolean {
+  const member = findMemberForUser(groupId, userId, db);
+  if (!member) {
+    return false;
+  }
+
+  if (settlement.mode === 'individual') {
+    return settlement.fromMemberId === member.id;
+  }
+
+  const meta = parseSettlementMeta(settlement);
+  if (settlement.fromMemberId === member.id) {
+    return true;
+  }
+  if (meta?.paidByUserId === userId || meta?.paidByMemberId === member.id) {
+    return true;
+  }
+  if (meta?.teamMemberIds?.includes(member.id)) {
+    return true;
+  }
+  return false;
+}
+
+export function getGlobalPendingTransfersForCurrentUser(
+  userId: string = getCurrentUserId(),
+): PendingTransferView[] {
+  logger.info('Global pending transfers fetch started', { userId });
+
+  const groups = getAccessibleGroupsForUser(userId);
+  const transfers: PendingTransferView[] = [];
+
+  for (const group of groups) {
+    const outgoing = calculateIndividualPendingTransfersForCurrentUser(group.id, userId);
+    transfers.push(...outgoing);
+  }
+
+  transfers.sort((a, b) => {
+    const groupCompare = a.groupName.localeCompare(b.groupName);
+    if (groupCompare !== 0) {
+      return groupCompare;
+    }
+    return b.amountCents - a.amountCents;
+  });
+
+  logger.info('Global pending transfers fetch succeeded', { count: transfers.length });
+  return transfers;
+}
+
+export function getGlobalSettlementHistoryForCurrentUser(
+  userId: string = getCurrentUserId(),
+): SettlementHistoryItemView[] {
+  logger.info('Global settlement history fetch started', { userId });
+
+  const groups = getAccessibleGroupsForUser(userId);
+  const history: SettlementHistoryItemView[] = [];
+
+  for (const group of groups) {
+    const groupHistory = getSettlementHistory(group.id).filter((item) => {
+      const db = readDb();
+      const settlement = db.settlements.find((entry) => entry.id === item.id);
+      if (!settlement) {
+        return false;
+      }
+      return isSettlementRelevantToUser(settlement, group.id, userId, db);
+    });
+    history.push(...groupHistory);
+  }
+
+  history.sort(
+    (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime(),
+  );
+
+  logger.info('Global settlement history fetch succeeded', { count: history.length });
   return history;
 }
 

@@ -7,11 +7,22 @@ import { Icon } from '../Icon';
 export function SettlementHistoryRow({
   item,
   showDivider = true,
+  showGroupTag = false,
 }: {
   item: SettlementHistoryItemView;
   showDivider?: boolean;
+  showGroupTag?: boolean;
 }) {
-  const modeLabel = item.mode === 'team' ? 'Team' : 'Individual';
+  const title =
+    item.historyTitle ?? (item.mode === 'team' ? 'Team settlement' : `Paid ${item.receiverName}`);
+  const baseDetailLine =
+    item.detailLine ?? (item.mode === 'team' ? 'Team · Settled' : 'Individual · Settled');
+  const detailLine =
+    showGroupTag && item.groupName
+      ? item.mode === 'individual'
+        ? `${item.groupName} · Individual · Settled`
+        : `${item.groupName} · ${baseDetailLine}`
+      : baseDetailLine;
 
   return (
     <View
@@ -37,30 +48,15 @@ export function SettlementHistoryRow({
           <Icon name="check-circle" size={18} color={colors.success} solid />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <Text style={[typography.bodyMedium, { flex: 1 }]} numberOfLines={2}>
-              {item.summary}
-            </Text>
-            <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{item.amountDisplay}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <View
-              style={{
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                borderRadius: 999,
-                backgroundColor: colors.background,
-              }}
-            >
-              <Text style={[typography.caption, { color: colors.textSecondary, fontWeight: '600' }]}>
-                {modeLabel}
-              </Text>
-            </View>
-            <Text style={[typography.caption, { color: colors.success, fontWeight: '600' }]}>Settled</Text>
-            <Text style={[typography.caption, { color: colors.textSecondary }]}>
-              Paid on {item.paidAtLabel}
-            </Text>
-          </View>
+          <Text style={typography.bodyMedium}>{title}</Text>
+          <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{item.amountDisplay}</Text>
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>{detailLine}</Text>
+          {item.paidToLine ? (
+            <Text style={[typography.caption, { color: colors.textSecondary }]}>{item.paidToLine}</Text>
+          ) : null}
+          <Text style={[typography.caption, { color: colors.textSecondary }]}>
+            {item.isZeroPayment ? 'Confirmed on' : 'Settled on'} {item.paidAtLabel}
+          </Text>
         </View>
       </View>
     </View>

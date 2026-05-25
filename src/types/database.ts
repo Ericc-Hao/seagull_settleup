@@ -152,6 +152,7 @@ export interface SettlementRow {
   status: SettlementStatusDb;
   paid_at: string | null;
   note: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }

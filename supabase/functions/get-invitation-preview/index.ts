@@ -21,6 +21,28 @@ function isExpired(expiresAt: string | null | undefined): boolean {
   return new Date(expiresAt).getTime() <= Date.now();
 }
 
+async function resolveInviteeHasAccount(
+  adminClient: ReturnType<typeof createClient>,
+  invitation: { invited_user_id: string | null; invited_email: string },
+): Promise<boolean> {
+  if (invitation.invited_user_id) {
+    return true;
+  }
+
+  const invitedEmail = invitation.invited_email?.trim().toLowerCase();
+  if (!invitedEmail) {
+    return false;
+  }
+
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('id')
+    .ilike('email', invitedEmail)
+    .maybeSingle();
+
+  return Boolean(profile?.id);
+}
+
 function buildInvitationPayload(
   invitation: {
     id: string;
@@ -32,6 +54,7 @@ function buildInvitationPayload(
   },
   groupName: string | null | undefined,
   inviter: { display_name: string | null; email: string | null } | null,
+  inviteeHasAccount: boolean,
 ) {
   const status = invitation.status as InvitationStatus;
   return {
@@ -45,6 +68,7 @@ function buildInvitationPayload(
     status,
     expiresAt: invitation.expires_at,
     isValid: status === 'pending' && !isExpired(invitation.expires_at),
+    inviteeHasAccount,
   };
 }
 
@@ -68,7 +92,7 @@ Deno.serve(async (req) => {
 
     let { data: invitation, error: invitationError } = await adminClient
       .from('group_invitations')
-      .select('id, group_id, invited_by, invited_email, status, expires_at, token')
+      .select('id, group_id, invited_by, invited_email, invited_user_id, status, expires_at, token')
       .eq('token', token)
       .maybeSingle();
 
@@ -80,7 +104,7 @@ Deno.serve(async (req) => {
     if (!invitation) {
       const byId = await adminClient
         .from('group_invitations')
-        .select('id, group_id, invited_by, invited_email, status, expires_at, token')
+        .select('id, group_id, invited_by, invited_email, invited_user_id, status, expires_at, token')
         .eq('id', token)
         .maybeSingle();
       invitation = byId.data;
@@ -95,16 +119,17 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'Invitation not found' }, 200);
     }
 
-    const [{ data: group }, { data: inviter }] = await Promise.all([
+    const [{ data: group }, { data: inviter }, inviteeHasAccount] = await Promise.all([
       adminClient.from('groups').select('name').eq('id', invitation.group_id).maybeSingle(),
       adminClient
         .from('profiles')
         .select('display_name, email')
         .eq('id', invitation.invited_by)
         .maybeSingle(),
+      resolveInviteeHasAccount(adminClient, invitation),
     ]);
 
-    const invitationPayload = buildInvitationPayload(invitation, group?.name, inviter);
+    const invitationPayload = buildInvitationPayload(invitation, group?.name, inviter, inviteeHasAccount);
 
     return jsonResponse({
       success: true,

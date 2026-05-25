@@ -10,11 +10,13 @@ export function InvitationContextCard({
   preview,
   loading = false,
   fetchFailed = false,
+  flow = 'register',
 }: {
   inviteToken?: string;
   preview?: InvitationPreviewView | null;
   loading?: boolean;
   fetchFailed?: boolean;
+  flow?: 'login' | 'register';
 }) {
   if (!inviteToken?.trim()) {
     return null;
@@ -57,15 +59,21 @@ export function InvitationContextCard({
         <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>
           This invitation link is invalid, expired, or has already been used.
         </Text>
-        <Text style={[typography.caption, { color: colors.textTertiary, lineHeight: 18 }]}>
-          You can still create an account below.
-        </Text>
+        {flow === 'register' ? (
+          <Text style={[typography.caption, { color: colors.textTertiary, lineHeight: 18 }]}>
+            You can still create an account below.
+          </Text>
+        ) : null}
       </View>
     );
   }
 
   const inviterLine = formatInviterByLine(preview.inviterName, preview.inviterEmail);
   const invitedEmailLabel = preview.invitedEmail ? maskEmail(preview.invitedEmail) : 'your invited email';
+  const showLoginCopy = flow === 'login' || preview.inviteeHasAccount;
+  const helperLine = showLoginCopy
+    ? `Log in with ${invitedEmailLabel} to accept this invitation.`
+    : `Create an account with ${invitedEmailLabel} to accept this invitation.`;
 
   return (
     <View
@@ -82,9 +90,7 @@ export function InvitationContextCard({
       <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>
         {inviterLine} invited you to join "{preview.groupName}".
       </Text>
-      <Text style={[typography.caption, { color: colors.textTertiary, lineHeight: 18 }]}>
-        Create an account with {invitedEmailLabel} to accept this invitation.
-      </Text>
+      <Text style={[typography.caption, { color: colors.textTertiary, lineHeight: 18 }]}>{helperLine}</Text>
     </View>
   );
 }

@@ -68,8 +68,8 @@ export function PaymentDetailsCard({
         style={{
           backgroundColor: colors.background,
           borderRadius: radii.md,
-          padding: 12,
-          gap: 4,
+          padding: 10,
+          gap: 2,
         }}
       >
         <PaymentDetailRow
@@ -110,6 +110,7 @@ export function PaymentDetailsCard({
           value={message}
           copyValue={message}
           copied={copiedField === 'message'}
+          numberOfLines={2}
           onCopy={() => void handleCopy('message', message)}
         />
       </View>

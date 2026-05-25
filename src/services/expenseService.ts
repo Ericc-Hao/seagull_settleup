@@ -8,11 +8,12 @@ import type {
   CreateSplitExpenseInput,
   UpdateExpenseInput,
 } from '../types/inputs';
-import type { Expense } from '../types/models';
+import type { Expense, Group } from '../types/models';
 import type {
   CurrentUserMonthlyExpenseSummary,
   ExpenseDetailView,
   ExpenseListItemView,
+  ExpenseReceiptView,
   ExpensesSummaryView,
   RecentGroupExpenseView,
   SplitExpenseSettlementStatus,
@@ -30,7 +31,7 @@ import {
   readDb,
 } from './dbHelpers';
 import { getCurrentUserId } from './groupService';
-import { createReceipt } from './receiptService';
+import { createReceipt, getExpenseReceiptView, toExpenseReceiptView } from './receiptService';
 import { getSettleableMembersWithProfiles, getCurrentUserGroupBalanceSummary } from './settlementService';
 import { uploadReceiptImage } from './storageService';
 
@@ -44,12 +45,16 @@ export function getExpensesByGroup(groupId: string): Expense[] {
   return getGroupExpenses(groupId);
 }
 
-function computeExpenseSettlementStatus(
+function computeUserExpenseSettlementStatus(
   splitCount: number,
+  includedInSplit: boolean,
   isGroupSettled: boolean,
 ): SplitExpenseSettlementStatus {
   if (splitCount === 0) {
     return 'not_split';
+  }
+  if (!includedInSplit) {
+    return 'settled';
   }
   if (isGroupSettled) {
     return 'settled';
@@ -73,13 +78,14 @@ function toRecentGroupExpenseView(
     categoryName: expense.category,
     expenseId: expense.id,
   });
-  const settlementStatus = computeExpenseSettlementStatus(splitCount, isGroupSettled);
+  const settlementStatus = computeUserExpenseSettlementStatus(splitCount, includedInSplit, isGroupSettled);
 
   logger.debug('Expense settlement status computed', {
     expenseId: expense.id,
     groupId: expense.groupId,
     settlementStatus,
     splitCount,
+    includedInSplit,
   });
 
   return {
@@ -342,16 +348,23 @@ export function getExpensesSummary(userId: string = getCurrentUserId()): Expense
   };
 }
 
-export function getExpenseDetailView(
-  expenseId: string,
-  userId: string = getCurrentUserId(),
-): ExpenseDetailView | undefined {
-  const expense = getExpenseById(expenseId);
-  if (!expense || expense.deletedAt) {
-    return undefined;
+function buildCachedReceiptView(expense: Expense, db = readDb()): ExpenseReceiptView | null {
+  const receipt =
+    (expense.receiptId ? db.receipts.find((entry) => entry.id === expense.receiptId) : undefined) ??
+    db.receipts.find((entry) => entry.expenseId === expense.id);
+
+  if (!receipt) {
+    return null;
   }
 
-  const db = readDb();
+  return toExpenseReceiptView(receipt);
+}
+
+function buildExpenseDetailView(
+  expense: Expense,
+  userId: string,
+  db = readDb(),
+): ExpenseDetailView | undefined {
   const config = getCategoryConfig({
     categoryId: expense.categoryId,
     categoryName: expense.category,
@@ -360,6 +373,7 @@ export function getExpenseDetailView(
   const groupName = expense.groupId
     ? db.groups.find((group) => group.id === expense.groupId)?.name
     : undefined;
+  const receipt = buildCachedReceiptView(expense, db);
 
   if (expense.type === 'personal') {
     return {
@@ -371,6 +385,7 @@ export function getExpenseDetailView(
       totalAmountDisplay: formatCAD(expense.amountCents),
       expenseDate: expense.expenseDate,
       splits: [],
+      receipt,
     };
   }
 
@@ -413,7 +428,68 @@ export function getExpenseDetailView(
         };
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    receipt,
   };
+}
+
+export interface ExpenseDetailResult {
+  expense: Expense;
+  group?: Group;
+  payer?: { displayName: string };
+  splits: ExpenseDetailView['splits'];
+  receipt: ExpenseReceiptView | null;
+}
+
+export async function getExpenseDetail(expenseId: string): Promise<ExpenseDetailResult | null> {
+  logger.info('Get expense detail started', { expenseId, table: 'expenses' });
+
+  const expense = getExpenseById(expenseId);
+  if (!expense || expense.deletedAt) {
+    logger.info('Get expense detail not found', { expenseId, table: 'expenses' });
+    return null;
+  }
+
+  const db = readDb();
+  const detailView = buildExpenseDetailView(expense, getCurrentUserId(), db);
+  if (!detailView) {
+    return null;
+  }
+
+  const group = expense.groupId ? db.groups.find((entry) => entry.id === expense.groupId) : undefined;
+  const payer = detailView.payerName ? { displayName: detailView.payerName } : undefined;
+
+  let receipt: ExpenseReceiptView | null = null;
+  try {
+    receipt = await getExpenseReceiptView(expenseId, expense.receiptId);
+  } catch (error) {
+    logger.error('Get expense detail receipt fetch failed', error, { expenseId, table: 'receipts' });
+  }
+
+  logger.info('Get expense detail succeeded', {
+    expenseId,
+    hasReceipt: Boolean(receipt),
+    table: 'expenses',
+  });
+
+  return {
+    expense,
+    group,
+    payer,
+    splits: detailView.splits,
+    receipt,
+  };
+}
+
+export function getExpenseDetailView(
+  expenseId: string,
+  userId: string = getCurrentUserId(),
+): ExpenseDetailView | undefined {
+  const expense = getExpenseById(expenseId);
+  if (!expense || expense.deletedAt) {
+    return undefined;
+  }
+
+  return buildExpenseDetailView(expense, userId);
 }
 
 async function attachReceiptToExpense(

@@ -184,6 +184,7 @@ export interface Settlement {
   status: SettlementRecordStatus;
   paidAt?: string;
   note?: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }

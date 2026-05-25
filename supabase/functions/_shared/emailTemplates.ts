@@ -4,6 +4,7 @@ export interface GroupInvitationEmailParams {
   inviteLink: string;
   invitedEmail: string;
   iconUrl?: string;
+  inviteeHasAccount?: boolean;
 }
 
 export interface GroupInvitationEmail {
@@ -58,17 +59,20 @@ function buildBrandMarkHtml(iconUrl?: string): string {
 }
 
 export function buildGroupInvitationEmail(params: GroupInvitationEmailParams): GroupInvitationEmail {
-  const { inviterNameOrEmail, groupName, inviteLink, invitedEmail, iconUrl } = params;
+  const { inviterNameOrEmail, groupName, inviteLink, invitedEmail, iconUrl, inviteeHasAccount } = params;
 
   const subject = `You've been invited to join "${groupName}" on Seagull Split`;
   const bodyLine = `${inviterNameOrEmail} invited you to join "${groupName}" on Seagull Split.`;
+  const actionLine = inviteeHasAccount
+    ? 'Log in with this email to accept the invitation.'
+    : 'Create an account with this email to accept the invitation.';
 
   const text = [
     `You've been invited to join "${groupName}" on Seagull Split.`,
     '',
-    `${inviterNameOrEmail} invited you to join "${groupName}".`,
+    bodyLine,
     '',
-    'Create an account or log in with this email to accept the invitation.',
+    actionLine,
     '',
     "After accepting, you'll be able to view shared expenses, add bills, track who paid, and settle balances with the group.",
     '',
@@ -107,7 +111,7 @@ export function buildGroupInvitationEmail(params: GroupInvitationEmailParams): G
                 ${escapeHtml(bodyLine)}
               </p>
               <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#53618A;">
-                Create an account or log in with this email to accept the invitation.
+                ${escapeHtml(actionLine)}
               </p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;background-color:#F7F8FF;border:1px solid #D2DAFF;border-radius:20px;">
                 <tr>

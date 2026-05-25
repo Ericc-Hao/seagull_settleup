@@ -8,17 +8,22 @@ import {
   ScreenPageHeader,
 } from '../components';
 import {
+  ConfirmTeamSettlementModal,
   MarkPaidConfirmModal,
   NoPendingTransfersCard,
-  PendingTransferCard,
+  PendingTransferDetailModal,
+  PendingTransferRow,
+  SettleTogetherCard,
   SettlementHistoryCard,
-  SettlementMethodCard,
-  TeamSelectionCard,
+  TeamSettlementModal,
 } from '../components/settlements';
+import { SectionCard } from '../components/SectionCard';
+import { useGlobalSettleUpData } from '../hooks/useGlobalSettleUpData';
 import { useSettleUpData } from '../hooks/useSettleUpData';
+import { useTeamSettlement } from '../hooks/useTeamSettlement';
 import { markTransferAsPaid } from '../services/settlementService';
 import type { PendingTransferView } from '../types/views';
-import { colors, layout, typography } from '../theme';
+import { colors, typography } from '../theme';
 import { createLogger } from '../utils/logger';
 import { safeBack } from '../utils/navigation';
 import { toUserFriendlyError } from '../utils/errors';
@@ -27,15 +32,31 @@ const logger = createLogger('SettleUpScreen');
 
 const SECTION_GAP = 20;
 
+export type SettleUpMode = 'global' | 'group';
+
 interface SettleUpScreenProps {
-  groupId: string;
+  mode: SettleUpMode;
+  groupId?: string;
 }
 
-export function SettleUpScreen({ groupId }: SettleUpScreenProps) {
+export function SettleUpScreen({ mode, groupId }: SettleUpScreenProps) {
+  const isGlobal = mode === 'global';
   const { refresh } = useAppData();
-  const data = useSettleUpData(groupId);
-  const [pendingTransfer, setPendingTransfer] = useState<PendingTransferView | null>(null);
+  const groupData = useSettleUpData(groupId ?? '', { enabled: !isGlobal });
+  const globalData = useGlobalSettleUpData();
+  const data = isGlobal ? globalData : groupData;
+  const team = useTeamSettlement(groupId ?? '', groupData.currentMemberId);
+  const [detailTransfer, setDetailTransfer] = useState<PendingTransferView | null>(null);
+  const [confirmTransfer, setConfirmTransfer] = useState<PendingTransferView | null>(null);
   const [marking, setMarking] = useState(false);
+
+  const handleBack = () => {
+    if (isGlobal) {
+      safeBack('/(tabs)/home');
+      return;
+    }
+    safeBack(groupId ? `/group/${groupId}` : '/(tabs)/groups');
+  };
 
   if (!data.ready) {
     return (
@@ -44,7 +65,7 @@ export function SettleUpScreen({ groupId }: SettleUpScreenProps) {
           <ScreenPageHeader
             title="Pending Transfers"
             subtitle="Loading..."
-            onBack={() => safeBack(`/group/${groupId}`)}
+            onBack={handleBack}
             showMascot={false}
           />
         }
@@ -54,7 +75,7 @@ export function SettleUpScreen({ groupId }: SettleUpScreenProps) {
     );
   }
 
-  if (!data.group) {
+  if (!isGlobal && !groupData.group) {
     return (
       <ScreenLayout
         header={
@@ -73,83 +94,152 @@ export function SettleUpScreen({ groupId }: SettleUpScreenProps) {
     );
   }
 
-
   const handleConfirmPaid = async () => {
-    if (!pendingTransfer) {
+    if (!confirmTransfer) {
       return;
     }
+    const transferGroupId = confirmTransfer.groupId;
     setMarking(true);
-    logger.info('Mark as paid submit started', { groupId, transferId: pendingTransfer.id });
+    logger.info('Mark as paid started', {
+      groupId: transferGroupId,
+      transferId: confirmTransfer.id,
+      mode: isGlobal ? 'global' : 'group',
+    });
     try {
-      await markTransferAsPaid(groupId, pendingTransfer);
-      logger.info('Mark as paid submit succeeded', { groupId, transferId: pendingTransfer.id });
-      setPendingTransfer(null);
+      await markTransferAsPaid(transferGroupId, confirmTransfer);
+      logger.info('Mark as paid succeeded', {
+        groupId: transferGroupId,
+        transferId: confirmTransfer.id,
+        mode: isGlobal ? 'global' : 'group',
+      });
+      setConfirmTransfer(null);
+      setDetailTransfer(null);
       await refresh();
     } catch (error) {
-      logger.error('Mark as paid submit failed', error, { groupId, transferId: pendingTransfer.id });
+      logger.error('Mark as paid failed', error, {
+        groupId: transferGroupId,
+        transferId: confirmTransfer.id,
+        mode: isGlobal ? 'global' : 'group',
+      });
       Alert.alert('Unable to mark as paid', toUserFriendlyError(error, 'Please try again.'));
     } finally {
       setMarking(false);
     }
   };
 
+  const handleConfirmTeamSettlement = async () => {
+    try {
+      await team.confirmTeamSettlement(refresh);
+    } catch (error) {
+      Alert.alert('Unable to save team settlement', toUserFriendlyError(error, 'Please try again.'));
+    }
+  };
+
+  const headerSubtitle = isGlobal
+    ? 'Review payments across all groups.'
+    : groupData.group
+      ? `Review your outgoing balances. For ${groupData.group.name}`
+      : 'Review your outgoing balances.';
+
+  const pendingSectionLabel = isGlobal ? 'Unsettled Payments' : 'Your Pending Transfers';
+
   return (
     <ScreenLayout
       header={
         <ScreenPageHeader
           title="Pending Transfers"
-          subtitle="Review your outgoing balances."
-          onBack={() => safeBack(`/group/${groupId}`)}
+          subtitle={headerSubtitle}
+          onBack={handleBack}
           showMascot={false}
         />
       }
     >
       <View style={{ gap: SECTION_GAP }}>
-        <SettlementMethodCard value={data.mode} onChange={data.setMode} />
-
-        {data.mode === 'team' ? (
-          <TeamSelectionCard
-            members={data.members}
-            selectedMemberIds={data.teamMemberIds}
-            onToggle={data.toggleTeamMember}
-            onSelectMyself={data.selectMyself}
-            onSelectAll={data.selectAllTeamMembers}
-            onClear={data.clearTeamSelection}
-            validationError={data.teamValidationError}
-          />
-        ) : null}
-
-        <FormSection label="Your Pending Transfers" noPadding>
+        <FormSection label={pendingSectionLabel} noPadding>
           {data.outgoingTransfers.length > 0 ? (
-            <View style={{ gap: layout.cardGap }}>
-              {data.outgoingTransfers.map((transfer) => (
-                <PendingTransferCard
-                  key={transfer.id}
+            <SectionCard>
+              {data.outgoingTransfers.map((transfer, index) => (
+                <PendingTransferRow
+                  key={`${transfer.groupId}-${transfer.id}`}
                   transfer={transfer}
-                  marking={marking && pendingTransfer?.id === transfer.id}
-                  onMarkPaid={() => setPendingTransfer(transfer)}
+                  showGroupTag={isGlobal}
+                  showDivider={index < data.outgoingTransfers.length - 1}
+                  onPress={() => setDetailTransfer(transfer)}
                 />
               ))}
-            </View>
+            </SectionCard>
           ) : (
-            <NoPendingTransfersCard />
+            <NoPendingTransfersCard variant={isGlobal ? 'global' : 'group'} />
           )}
         </FormSection>
 
-        <SettlementHistoryCard items={data.settlementHistory} />
+        {!isGlobal && groupData.showSettleTogether ? (
+          <SettleTogetherCard onPress={team.openSelection} />
+        ) : null}
+
+        <SettlementHistoryCard items={data.settlementHistory} showGroupTag={isGlobal} />
       </View>
 
+      <PendingTransferDetailModal
+        visible={Boolean(detailTransfer)}
+        transfer={detailTransfer}
+        showGroupTag={isGlobal}
+        marking={marking}
+        onClose={() => {
+          if (!marking) {
+            setDetailTransfer(null);
+          }
+        }}
+        onMarkPaid={() => {
+          if (detailTransfer) {
+            setConfirmTransfer(detailTransfer);
+          }
+        }}
+      />
+
       <MarkPaidConfirmModal
-        visible={Boolean(pendingTransfer)}
-        transfer={pendingTransfer}
+        visible={Boolean(confirmTransfer)}
+        transfer={confirmTransfer}
         confirming={marking}
         onCancel={() => {
           if (!marking) {
-            setPendingTransfer(null);
+            setConfirmTransfer(null);
           }
         }}
         onConfirm={() => void handleConfirmPaid()}
       />
+
+      {!isGlobal ? (
+        <>
+          <TeamSettlementModal
+            visible={team.selectionVisible}
+            step={team.step}
+            members={groupData.members}
+            selectedMemberIds={team.selectedMemberIds}
+            currentMemberId={groupData.currentMemberId}
+            validationError={team.validationError}
+            previewTransfer={team.previewTransfer}
+            reviewing={team.reviewing}
+            onToggleMember={team.toggleMember}
+            onSelectMyself={team.selectMyself}
+            onSelectAll={team.selectAll}
+            onClear={team.clearSelection}
+            onReview={team.reviewTeamSettlement}
+            onBackToSelection={() => team.setStep('select')}
+            onConfirmPreview={team.openConfirm}
+            onClose={team.closeSelection}
+          />
+
+          <ConfirmTeamSettlementModal
+            visible={team.confirmVisible}
+            transfer={team.previewTransfer}
+            selectedMemberNames={team.selectedMemberNames}
+            confirming={team.confirming}
+            onCancel={team.cancelConfirm}
+            onConfirm={() => void handleConfirmTeamSettlement()}
+          />
+        </>
+      ) : null}
     </ScreenLayout>
   );
 }

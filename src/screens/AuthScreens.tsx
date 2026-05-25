@@ -12,7 +12,7 @@ import { useInviteRouteParam } from '../hooks/useInviteRouteParam';
 import { setPendingInviteToken } from '../lib/pendingInviteToken';
 import { colors, layout, radii, shadows, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
-import { maskEmail } from '../utils/validation';
+import { maskEmail, normalizeEmail } from '../utils/validation';
 import { safeBack } from '../utils/navigation';
 
 const authUiLogger = createLogger('AuthScreens');
@@ -205,8 +205,9 @@ export function WelcomeScreen() {
 export function LoginScreen() {
   const { signIn, error, clearError, loading } = useAuth();
   const inviteToken = useInviteRouteParam();
-  const { preview, loading: previewLoading, fetchFailed } = useInvitationPreview(inviteToken);
+  const { preview, loading: previewLoading, fetchFailed, isPendingInvite } = useInvitationPreview(inviteToken);
   const [email, setEmail] = useState('');
+  const [emailLocked, setEmailLocked] = useState(false);
   const [password, setPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
 
@@ -223,14 +224,25 @@ export function LoginScreen() {
   }, [inviteToken]);
 
   useEffect(() => {
-    if (preview?.isValid && preview.invitedEmail) {
+    if (isPendingInvite && preview?.invitedEmail) {
       setEmail(preview.invitedEmail);
+      setEmailLocked(true);
+      authUiLogger.info('Email prefilled from invitation', {
+        email: maskEmail(preview.invitedEmail),
+      });
+      return;
     }
-  }, [preview?.invitedEmail, preview?.isValid]);
+
+    if (!previewLoading) {
+      setEmailLocked(false);
+    }
+  }, [isPendingInvite, preview?.invitedEmail, previewLoading]);
 
   const submit = async () => {
     clearError();
-    if (!email.trim()) {
+    const loginEmail = emailLocked && preview?.invitedEmail ? preview.invitedEmail : email.trim();
+
+    if (!loginEmail) {
       setValidation('Email is required.');
       return;
     }
@@ -238,9 +250,17 @@ export function LoginScreen() {
       setValidation('Password is required.');
       return;
     }
+    if (isPendingInvite && preview?.invitedEmail) {
+      if (normalizeEmail(loginEmail) !== normalizeEmail(preview.invitedEmail)) {
+        setValidation(
+          `This invitation was sent to ${maskEmail(preview.invitedEmail)}. Please log in with that email.`,
+        );
+        return;
+      }
+    }
     setValidation(null);
-    authUiLogger.info('Login submit started', { email: maskEmail(email) });
-    await signIn(email, password);
+    authUiLogger.info('Login submit started', { email: maskEmail(loginEmail) });
+    await signIn(loginEmail, password);
   };
 
   return (
@@ -250,11 +270,22 @@ export function LoginScreen() {
         preview={preview}
         loading={previewLoading}
         fetchFailed={fetchFailed}
+        flow="login"
       />
-      <AuthInput label="Email" value={email} onChangeText={setEmail} />
+      <AuthInput
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        disabled={emailLocked}
+        helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
+      />
       <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
       <ErrorText message={validation ?? error} />
-      <PrimaryButton label={loading ? 'Logging In...' : 'Log In'} onPress={() => void submit()} disabled={loading} />
+      <PrimaryButton
+        label={loading ? 'Logging In...' : 'Log In'}
+        onPress={() => void submit()}
+        disabled={loading || (Boolean(inviteToken) && previewLoading)}
+      />
       <AuthLink
         text="New here?"
         action="Create Account"
@@ -304,6 +335,8 @@ export function RegisterScreen() {
     }
   }, [preview?.status, preview?.invitedEmail, previewLoading]);
 
+  const showExistingAccountPrompt = Boolean(isPendingInvite && preview?.inviteeHasAccount);
+
   const submit = async () => {
     clearError();
     const registrationEmail = emailLocked && preview?.invitedEmail ? preview.invitedEmail : email.trim();
@@ -348,25 +381,54 @@ export function RegisterScreen() {
         preview={preview}
         loading={previewLoading}
         fetchFailed={fetchFailed}
+        flow="register"
       />
-      <AvatarPicker uri={avatarUri} displayName={displayName} onPick={setAvatarUri} />
-      <AuthInput label="Display Name" value={displayName} onChangeText={setDisplayName} autoCapitalize="words" />
-      <AuthInput
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        disabled={emailLocked}
-        helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
-      />
-      <AuthInput label="Phone (optional)" value={phone} onChangeText={setPhone} />
-      <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
-      <AuthInput label="Confirm Password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
-      <ErrorText message={validation ?? error} />
-      <PrimaryButton
-        label={loading ? 'Creating Account...' : 'Create Account'}
-        onPress={() => void submit()}
-        disabled={loading || (Boolean(inviteToken) && previewLoading)}
-      />
+      {showExistingAccountPrompt ? (
+        <View
+          style={{
+            backgroundColor: colors.background,
+            borderRadius: radii.lg,
+            padding: layout.cardPadding,
+            gap: spacing.sm,
+            borderWidth: 1,
+            borderColor: colors.borderSubtle,
+          }}
+        >
+          <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>
+            An account already exists for this email. Please log in to accept the invitation.
+          </Text>
+          <PrimaryButton
+            label="Log In"
+            onPress={() => router.push(authRoute('/login', inviteToken))}
+          />
+        </View>
+      ) : (
+        <>
+          <AvatarPicker uri={avatarUri} displayName={displayName} onPick={setAvatarUri} />
+          <AuthInput label="Display Name" value={displayName} onChangeText={setDisplayName} autoCapitalize="words" />
+          <AuthInput
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            disabled={emailLocked}
+            helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
+          />
+          <AuthInput label="Phone (optional)" value={phone} onChangeText={setPhone} />
+          <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+          <AuthInput
+            label="Confirm Password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry
+          />
+          <ErrorText message={validation ?? error} />
+          <PrimaryButton
+            label={loading ? 'Creating Account...' : 'Create Account'}
+            onPress={() => void submit()}
+            disabled={loading || (Boolean(inviteToken) && previewLoading)}
+          />
+        </>
+      )}
       <AuthLink
         text="Already have an account?"
         action="Log In"

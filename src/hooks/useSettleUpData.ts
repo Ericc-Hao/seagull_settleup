@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { useAppData } from '../context/AppDataContext';
-import type { SettlementMode } from '../types/models';
 import { findMemberForUser } from '../services/dbHelpers';
 import { getCurrentUserId, getGroupById } from '../services/groupService';
 import {
+  calculateIndividualPendingTransfersForCurrentUser,
   createEmptySettleUpView,
-  getSettleUpView,
+  getCurrentUserGroupBalanceSummary,
   getSettlementHistory,
   getSettleableMembersWithProfiles,
 } from '../services/settlementService';
@@ -14,116 +14,67 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('useSettleUpData');
 
-export function useSettleUpData(groupId: string) {
+export function useSettleUpData(groupId: string, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
   const { version, ready } = useAppData();
-  const group = useMemo(() => getGroupById(groupId), [groupId, version]);
-  const [mode, setMode] = useState<SettlementMode>('individual');
-  const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
-
+  const group = useMemo(() => (enabled && groupId ? getGroupById(groupId) : undefined), [groupId, enabled, version]);
   const currentMemberId = useMemo(() => {
-    if (!groupId) {
+    if (!enabled || !groupId || !ready) {
       return undefined;
     }
     return findMemberForUser(groupId, getCurrentUserId())?.id;
-  }, [groupId, version]);
+  }, [enabled, groupId, ready, version]);
 
   const members = useMemo(() => {
-    if (!groupId || !ready) {
+    if (!enabled || !groupId || !ready) {
       return [];
     }
     return getSettleableMembersWithProfiles(groupId);
-  }, [groupId, ready, version]);
+  }, [enabled, groupId, ready, version]);
 
-  useEffect(() => {
-    if (!currentMemberId) {
-      return;
-    }
-    setTeamMemberIds((current) =>
-      current.includes(currentMemberId) ? current : [...current, currentMemberId],
-    );
-  }, [currentMemberId]);
-
-  const setModeWithLog = useCallback((nextMode: SettlementMode) => {
-    logger.info('Settlement mode changed', { groupId, mode: nextMode });
-    setMode(nextMode);
-  }, [groupId]);
-
-  const teamValidationError = useMemo(() => {
-    if (mode !== 'team') {
-      return undefined;
-    }
-    if (teamMemberIds.length === 0) {
-      return 'Select at least one member for team settlement.';
-    }
-    if (currentMemberId && !teamMemberIds.includes(currentMemberId)) {
-      return 'Your team must include you.';
-    }
-    return undefined;
-  }, [currentMemberId, mode, teamMemberIds]);
-
-  const view = useMemo(() => {
-    if (!groupId || !ready || !group) {
-      return createEmptySettleUpView(groupId, group?.name ?? '');
-    }
-    if (mode === 'team' && teamValidationError) {
+  const { outgoingTransfers, settlementHistory, showSettleTogether } = useMemo(() => {
+    if (!enabled || !groupId || !ready || !group) {
       return {
-        ...createEmptySettleUpView(groupId, group.name),
-        mode,
-        settlementHistory: getSettlementHistory(groupId),
+        ...createEmptySettleUpView(groupId, group?.name ?? ''),
+        showSettleTogether: false,
       };
     }
-    return getSettleUpView(groupId, mode, teamMemberIds);
-  }, [groupId, mode, teamMemberIds, teamValidationError, version, ready, group]);
 
-  const toggleTeamMember = useCallback(
-    (memberId: string) => {
-      if (memberId === currentMemberId) {
-        return;
-      }
-      setTeamMemberIds((current) => {
-        const next = current.includes(memberId)
-          ? current.filter((id) => id !== memberId)
-          : [...current, memberId];
-        logger.info('Team selection changed', { groupId, count: next.length });
-        return next;
-      });
-    },
-    [currentMemberId, groupId],
-  );
+    logger.info('Group pending transfers fetch started', { groupId });
 
-  const selectMyself = useCallback(() => {
-    if (!currentMemberId) {
-      return;
+    try {
+      const transfers = calculateIndividualPendingTransfersForCurrentUser(groupId);
+      logger.info('Group pending transfers fetch succeeded', { groupId, count: transfers.length });
+
+      logger.info('Group settlement history fetch started', { groupId });
+      const history = getSettlementHistory(groupId);
+      logger.info('Group settlement history fetch succeeded', { groupId, count: history.length });
+
+      const balanceSummary = getCurrentUserGroupBalanceSummary(groupId);
+      const hasUnsettledBalance = balanceSummary.adjustedBalanceCents < 0;
+
+      return {
+        ...createEmptySettleUpView(groupId, group.name),
+        outgoingTransfers: transfers,
+        settlementHistory: history,
+        showSettleTogether: transfers.length > 0 || hasUnsettledBalance,
+      };
+    } catch (error) {
+      logger.error('Pending transfers fetch failed', error, { groupId });
+      return {
+        ...createEmptySettleUpView(groupId, group.name),
+        showSettleTogether: false,
+      };
     }
-    logger.info('Team selection changed', { groupId, action: 'select_myself' });
-    setTeamMemberIds([currentMemberId]);
-  }, [currentMemberId, groupId]);
-
-  const selectAllTeamMembers = useCallback(() => {
-    logger.info('Team selection changed', { groupId, action: 'select_all' });
-    setTeamMemberIds(members.map((member) => member.id));
-  }, [groupId, members]);
-
-  const clearTeamSelection = useCallback(() => {
-    logger.info('Team selection changed', { groupId, action: 'clear' });
-    setTeamMemberIds(currentMemberId ? [currentMemberId] : []);
-  }, [currentMemberId, groupId]);
+  }, [enabled, groupId, ready, group, version]);
 
   return {
     group,
-    ready,
-    view,
-    mode,
-    setMode: setModeWithLog,
+    ready: enabled ? ready : true,
     members,
     currentMemberId,
-    teamMemberIds,
-    toggleTeamMember,
-    selectMyself,
-    selectAllTeamMembers,
-    clearTeamSelection,
-    teamValidationError,
-    outgoingTransfers: view.outgoingTransfers,
-    settlementHistory: view.settlementHistory,
+    outgoingTransfers,
+    settlementHistory,
+    showSettleTogether,
   };
 }

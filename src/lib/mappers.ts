@@ -228,6 +228,7 @@ export function mapSettlement(row: SettlementRow): Settlement {
     status: row.status as SettlementRecordStatus,
     paidAt: row.paid_at ?? undefined,
     note: row.note ?? undefined,
+    metadata: row.metadata ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

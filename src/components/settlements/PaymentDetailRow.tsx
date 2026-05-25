@@ -10,6 +10,7 @@ export function PaymentDetailRow({
   disabled = false,
   copied = false,
   onCopy,
+  numberOfLines = 1,
 }: {
   label: string;
   value: string;
@@ -17,6 +18,7 @@ export function PaymentDetailRow({
   disabled?: boolean;
   copied?: boolean;
   onCopy?: () => void;
+  numberOfLines?: number;
 }) {
   const canCopy = !disabled && Boolean(copyValue?.trim()) && Boolean(onCopy);
 
@@ -26,7 +28,7 @@ export function PaymentDetailRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        minHeight: 36,
+        minHeight: 32,
       }}
     >
       <Text style={[typography.caption, { width: 58, color: colors.textSecondary, fontWeight: '600' }]}>
@@ -34,7 +36,8 @@ export function PaymentDetailRow({
       </Text>
       <Text
         style={[typography.bodyMedium, { flex: 1, color: disabled ? colors.textTertiary : colors.textPrimary }]}
-        numberOfLines={1}
+        numberOfLines={numberOfLines}
+        ellipsizeMode="tail"
       >
         {value}
       </Text>

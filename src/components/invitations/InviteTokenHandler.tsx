@@ -1,29 +1,40 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Text, View } from 'react-native';
 
+import { PrimaryButton } from '../PrimaryButton';
+import { SecondaryButton } from '../SecondaryButton';
+import { BottomSheet } from '../common/BottomSheet';
 import { useAppData } from '../../context/AppDataContext';
+import { useAuth } from '../../context/AuthContext';
 import { useInvitationActions } from '../../hooks/useInvitationActions';
 import { clearPendingInviteToken, getPendingInviteToken } from '../../lib/pendingInviteToken';
 import {
+  getInvitationPreviewByToken,
   getPendingInvitationByToken,
   syncPendingInvitationsForCurrentUser,
 } from '../../services/invitationService';
+import { colors, spacing, typography } from '../../theme';
 import type { PendingInvitationView } from '../../types/views';
 import { createLogger } from '../../utils/logger';
+import { maskEmail, normalizeEmail } from '../../utils/validation';
 import { InvitationActionModal } from './InvitationActionModal';
 
 const logger = createLogger('InviteTokenHandler');
 
 export function InviteTokenHandler() {
   const { refresh } = useAppData();
+  const { user, signOut } = useAuth();
   const [invitation, setInvitation] = useState<PendingInvitationView | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mismatchEmail, setMismatchEmail] = useState<string | null>(null);
   const handledTokenRef = useRef<string | null>(null);
 
   const closeModal = useCallback(async () => {
     setModalVisible(false);
     setInvitation(null);
+    setMismatchEmail(null);
     await clearPendingInviteToken();
   }, []);
 
@@ -32,7 +43,7 @@ export function InviteTokenHandler() {
     await syncPendingInvitationsForCurrentUser();
   }, [refresh]);
 
-  const { accept, decline, processingId, error, clearError } = useInvitationActions(onComplete);
+  const { accept, decline, processingId, clearError } = useInvitationActions(onComplete);
 
   useEffect(() => {
     let mounted = true;
@@ -46,9 +57,25 @@ export function InviteTokenHandler() {
       handledTokenRef.current = token;
       setLoading(true);
       setModalVisible(true);
+      setMismatchEmail(null);
       logger.info('Invite token flow started', { target: 'InvitationActionModal' });
 
       try {
+        const preview = await getInvitationPreviewByToken(token);
+        const sessionEmail = user?.email?.trim();
+        const invitedEmail = preview?.invitedEmail?.trim();
+
+        if (
+          preview?.isValid &&
+          sessionEmail &&
+          invitedEmail &&
+          normalizeEmail(sessionEmail) !== normalizeEmail(invitedEmail)
+        ) {
+          setMismatchEmail(invitedEmail);
+          setInvitation(null);
+          return;
+        }
+
         const pendingInvitation = await getPendingInvitationByToken(token);
         if (!mounted) {
           return;
@@ -76,7 +103,7 @@ export function InviteTokenHandler() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user?.email]);
 
   const handleAccept = useCallback(async () => {
     if (!invitation) {
@@ -105,8 +132,31 @@ export function InviteTokenHandler() {
     await closeModal();
   }, [closeModal, clearError, decline, invitation]);
 
+  const handleLogoutForMismatch = useCallback(async () => {
+    const token = handledTokenRef.current;
+    await closeModal();
+    await signOut();
+    if (token) {
+      router.replace(`/login?invite=${encodeURIComponent(token)}`);
+    }
+  }, [closeModal, signOut]);
+
   if (!modalVisible) {
     return null;
+  }
+
+  if (mismatchEmail) {
+    return (
+      <BottomSheet visible={modalVisible} title="Wrong account" onClose={() => void closeModal()}>
+        <View style={{ gap: spacing.md }}>
+          <Text style={[typography.body, { color: colors.textSecondary, lineHeight: 22 }]}>
+            This invitation was sent to {maskEmail(mismatchEmail)}. Please switch accounts to accept it.
+          </Text>
+          <PrimaryButton label="Log Out" onPress={() => void handleLogoutForMismatch()} />
+          <SecondaryButton label="Not Now" variant="outline" onPress={() => void closeModal()} />
+        </View>
+      </BottomSheet>
+    );
   }
 
   return (

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, radii, spacing, typography } from '../../theme';
 
@@ -8,12 +9,18 @@ export function BottomSheet({
   title,
   onClose,
   children,
+  footer,
 }: {
   visible: boolean;
   title?: string;
   onClose: () => void;
   children: ReactNode;
+  footer?: ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetMaxHeight = windowHeight * 0.85;
+
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
       <Pressable
@@ -30,25 +37,66 @@ export function BottomSheet({
             backgroundColor: colors.white,
             borderTopLeftRadius: radii['2xl'],
             borderTopRightRadius: radii['2xl'],
-            paddingTop: spacing.md,
-            paddingBottom: spacing.xl,
-            paddingHorizontal: spacing.lg,
-            gap: spacing.md,
-            maxHeight: '85%',
+            maxHeight: sheetMaxHeight,
+            width: '100%',
           }}
         >
           <View
             style={{
-              alignSelf: 'center',
-              width: 40,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: colors.borderSubtle,
-              marginBottom: spacing.xs,
+              maxHeight: sheetMaxHeight,
+              flexDirection: 'column',
             }}
-          />
-          {title ? <Text style={typography.title}>{title}</Text> : null}
-          {children}
+          >
+            <View
+              style={{
+                paddingTop: spacing.md,
+                paddingHorizontal: spacing.lg,
+                gap: spacing.sm,
+              }}
+            >
+              <View
+                style={{
+                  alignSelf: 'center',
+                  width: 40,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: colors.borderSubtle,
+                }}
+              />
+              {title ? <Text style={typography.title}>{title}</Text> : null}
+            </View>
+
+            <ScrollView
+              style={{ flexGrow: 0, flexShrink: 1, minHeight: 0 }}
+              contentContainerStyle={{
+                paddingHorizontal: spacing.lg,
+                paddingTop: spacing.sm,
+                paddingBottom: footer ? spacing.md : spacing.xl + insets.bottom,
+                gap: spacing.md,
+              }}
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {children}
+            </ScrollView>
+
+            {footer ? (
+              <View
+                style={{
+                  paddingHorizontal: spacing.lg,
+                  paddingTop: spacing.sm,
+                  paddingBottom: spacing.lg + insets.bottom,
+                  gap: spacing.sm,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.borderSubtle,
+                  backgroundColor: colors.white,
+                }}
+              >
+                {footer}
+              </View>
+            ) : null}
+          </View>
         </Pressable>
       </Pressable>
     </Modal>

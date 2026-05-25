@@ -40,7 +40,7 @@ export function HomeScreen() {
 
   const onQuickAction = (id: string) => {
     if (id === 'create') router.push('/create-group');
-    if (id === 'settle' && primaryGroupId) router.push(`/group/${primaryGroupId}/settle-up`);
+    if (id === 'settle') router.push('/pending-transfers');
     if (id === 'personal') {
       router.push('/add-expense');
     }

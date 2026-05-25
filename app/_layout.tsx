@@ -83,6 +83,7 @@ function RootNavigator() {
         <Stack.Screen name="add-expense" options={modalStackScreenOptions} />
         <Stack.Screen name="expense" />
         <Stack.Screen name="edit-profile" options={modalStackScreenOptions} />
+        <Stack.Screen name="pending-transfers" />
         <Stack.Screen name="group/[groupId]" />
       </Stack>
     </AuthenticatedShell>

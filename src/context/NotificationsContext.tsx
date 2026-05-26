@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { registerNotificationsRefresher } from './appDataBridge';
+import { useAppData } from './AppDataContext';
 import { useAuth } from './AuthContext';
 import {
   clearAllNotifications,
@@ -39,6 +40,7 @@ interface NotificationsContextValue {
   markAllAsRead: () => Promise<void>;
   clearOne: (notificationId: string) => Promise<void>;
   clearAll: () => Promise<void>;
+  clearingAll: boolean;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -55,11 +57,13 @@ function clearNotificationState(
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const { authInitialized, session, signOut } = useAuth();
+  const { invalidate } = useAppData();
   const userId = session?.user?.id;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchGeneration = useRef(0);
@@ -199,16 +203,27 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const clearAll = useCallback(async () => {
     logger.info('Clear all notifications started');
+    fetchGeneration.current += 1;
+    setClearingAll(true);
+    setError(null);
     try {
-      await clearAllNotifications();
+      const clearedCount = await clearAllNotifications();
       setNotifications([]);
       setUnreadCount(0);
-      logger.info('Clear all notifications succeeded');
+      setInitialLoading(false);
+      setRefreshing(false);
+      hasLoadedOnceRef.current = true;
+      setHasLoadedOnce(true);
+      invalidate('notifications');
+      logger.info('Clear all notifications succeeded', { clearedCount });
     } catch (err) {
       logger.error('Clear all notifications failed', err);
+      setError(toUserFriendlyError(err, 'Unable to clear notifications.'));
       throw err;
+    } finally {
+      setClearingAll(false);
     }
-  }, []);
+  }, [invalidate]);
 
   const value = useMemo(
     () => ({
@@ -224,10 +239,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       markAllAsRead,
       clearOne,
       clearAll,
+      clearingAll,
     }),
     [
       clearAll,
       clearOne,
+      clearingAll,
       error,
       hasLoadedOnce,
       initialLoading,

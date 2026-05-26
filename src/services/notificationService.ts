@@ -249,11 +249,13 @@ export async function clearNotification(notificationId: string): Promise<void> {
   logger.info('Clear notification started', { notificationId, table: 'notifications' });
   try {
     const userId = await getCurrentUserId();
+    const now = isoNow();
     const { error } = await supabase
       .from('notifications')
-      .update({ cleared_at: isoNow() })
+      .update({ cleared_at: now, is_read: true, read_at: now })
       .eq('id', notificationId)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .is('cleared_at', null);
 
     if (error) {
       throw error;
@@ -266,22 +268,25 @@ export async function clearNotification(notificationId: string): Promise<void> {
   }
 }
 
-export async function clearAllNotifications(): Promise<void> {
+export async function clearAllNotifications(): Promise<number> {
   logger.info('Clear all notifications started', { table: 'notifications' });
   try {
     const userId = await getCurrentUserId();
     const now = isoNow();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('notifications')
-      .update({ cleared_at: now })
+      .update({ cleared_at: now, is_read: true, read_at: now })
       .eq('user_id', userId)
-      .is('cleared_at', null);
+      .is('cleared_at', null)
+      .select('id');
 
     if (error) {
       throw error;
     }
 
-    logger.info('Clear all notifications succeeded', { table: 'notifications' });
+    const clearedCount = data?.length ?? 0;
+    logger.info('Clear all notifications succeeded', { clearedCount, table: 'notifications' });
+    return clearedCount;
   } catch (error) {
     logger.error('Clear all notifications failed', error, { table: 'notifications' });
     throw error;

@@ -37,6 +37,7 @@ import {
   SparklesIcon,
   TagIcon,
   TicketIcon,
+  TrashIcon,
   TruckIcon,
   UserGroupIcon,
   UserIcon,
@@ -94,6 +95,7 @@ export type IconName =
   | 'arrow-down-tray'
   | 'truck'
   | 'ticket'
+  | 'trash'
   | 'shopping-cart'
   | 'shopping-bag'
   | 'envelope'
@@ -139,6 +141,7 @@ const OUTLINE: Record<IconName, ComponentType<HeroIconProps>> = {
   'arrow-down-tray': ArrowDownTrayIcon,
   truck: TruckIcon,
   ticket: TicketIcon,
+  trash: TrashIcon,
   'shopping-cart': ShoppingCartIcon,
   'shopping-bag': ShoppingBagIcon,
   envelope: EnvelopeIcon,

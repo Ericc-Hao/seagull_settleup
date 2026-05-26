@@ -1,10 +1,11 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { EmptyStateCard, PrimaryButton, ScreenLayout } from '../components';
 import { headerLayout } from '../components/common/headerLayout';
 import { InvitationActionModal } from '../components/invitations/InvitationActionModal';
+import { ClearAllNotificationsModal } from '../components/notifications/ClearAllNotificationsModal';
 import { NotificationRow } from '../components/notifications/NotificationRow';
 import { NotificationsListSkeleton } from '../components/notifications/NotificationsListSkeleton';
 import { useAppData } from '../context/AppDataContext';
@@ -19,7 +20,7 @@ import type { Notification } from '../types/models';
 import type { PendingInvitationView } from '../types/views';
 import { createLogger } from '../utils/logger';
 import { colors, layout, typography } from '../theme';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
 
 const logger = createLogger('NotificationsScreen');
 
@@ -28,11 +29,11 @@ function HeaderIconButton({
   disabled,
   onPress,
 }: {
-  icon: 'chevron-left' | 'check-circle' | 'x-mark';
+  icon: IconName;
   disabled?: boolean;
   onPress: () => void;
 }) {
-  const iconSize = icon === 'x-mark' ? headerLayout.iconSize - 2 : headerLayout.iconSize;
+  const iconSize = icon === 'trash' ? headerLayout.iconSize - 2 : headerLayout.iconSize;
   return (
     <Pressable
       onPress={onPress}
@@ -68,11 +69,13 @@ export function NotificationsScreen() {
     markAllAsRead,
     clearOne,
     clearAll,
+    clearingAll,
   } = useNotifications();
   const { invalidate } = useAppData();
   const [selectedInvitation, setSelectedInvitation] = useState<PendingInvitationView | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
+  const [clearAllModalVisible, setClearAllModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -165,21 +168,22 @@ export function NotificationsScreen() {
     [markAsRead],
   );
 
-  const confirmClearAll = useCallback(() => {
-    Alert.alert(
-      'Clear all notifications?',
-      'This will remove all notifications from this list.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: () => {
-            void clearAll();
-          },
-        },
-      ],
-    );
+  const openClearAllConfirmation = useCallback(() => {
+    if (notifications.length === 0 || clearingAll) {
+      return;
+    }
+    logger.info('Clear all notifications pressed', { count: notifications.length });
+    logger.info('Clear all confirmation opened');
+    setClearAllModalVisible(true);
+  }, [clearingAll, notifications.length]);
+
+  const handleConfirmClearAll = useCallback(async () => {
+    try {
+      await clearAll();
+      setClearAllModalVisible(false);
+    } catch {
+      // Error surfaced via NotificationsContext.error
+    }
   }, [clearAll]);
 
   const handleAccept = useCallback(async () => {
@@ -232,9 +236,9 @@ export function NotificationsScreen() {
                   onPress={() => void markAllAsRead()}
                 />
                 <HeaderIconButton
-                  icon="x-mark"
-                  disabled={notifications.length === 0}
-                  onPress={confirmClearAll}
+                  icon="trash"
+                  disabled={notifications.length === 0 || clearingAll}
+                  onPress={openClearAllConfirmation}
                 />
               </View>
             </View>
@@ -317,6 +321,13 @@ export function NotificationsScreen() {
           }
           setModalVisible(false);
         }}
+      />
+
+      <ClearAllNotificationsModal
+        visible={clearAllModalVisible}
+        loading={clearingAll}
+        onCancel={() => setClearAllModalVisible(false)}
+        onConfirm={() => void handleConfirmClearAll()}
       />
     </>
   );

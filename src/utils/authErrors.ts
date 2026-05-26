@@ -49,8 +49,12 @@ export function isJwtClockSyncError(error: unknown): boolean {
 export function toUserFriendlyAuthError(error: unknown): string {
   const message = getErrorMessage(error);
   const lower = message.toLowerCase();
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: string }).code ?? '').toLowerCase()
+      : '';
 
-  if (lower.includes('invalid login credentials')) {
+  if (lower.includes('invalid login credentials') || code === 'invalid_credentials') {
     return 'Invalid email or password.';
   }
   if (lower.includes('invalid refresh token') || lower.includes('refresh token not found')) {

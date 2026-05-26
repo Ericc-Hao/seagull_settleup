@@ -124,7 +124,7 @@ export function useCreateGroup() {
       logger.info('Create group submit succeeded', { groupId: result.group.id });
       return result;
     } catch (error) {
-      logger.error('Create group submit failed', error, { invitedCount: invitedEmails.length });
+      logger.warn('Create group submit failed with handled form error', { invitedCount: invitedEmails.length }, error);
       const message = toUserFriendlyError(error, 'Unable to create group. Please try again.');
       setSubmitError(message);
       throw error;

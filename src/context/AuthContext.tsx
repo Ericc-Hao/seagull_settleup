@@ -157,11 +157,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applySession, handleExpiredSession, markJwtTimingFailure]);
 
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  const clearSessionNotice = useCallback(() => {
+    setSessionNotice(null);
+  }, []);
+
   const signIn = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);
     setSessionNotice(null);
     jwtTimingFailureCount.current = 0;
+    applySession(null);
     try {
       const result = await signInWithEmail(email, password);
       applySession(result.session);
@@ -172,7 +181,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.error('Sync pending invitations after sign in failed', syncError);
       }
     } catch (err) {
-      setError(authMessage(err, 'Unable to log in.'));
+      const message = authMessage(err, 'Unable to log in.');
+      setError(message);
+      applySession(null);
+      logger.warn('Sign in failed', { reason: message });
+      throw new AuthValidationError(message);
     } finally {
       setLoading(false);
     }
@@ -199,7 +212,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.error('Sync pending invitations after sign in failed', syncError);
       }
     } catch (err) {
-      setError(authMessage(err, 'Unable to create account.'));
+      const message = authMessage(err, 'Unable to create account.');
+      setError(message);
+      logger.warn('Sign up failed', { reason: message });
+      throw new AuthValidationError(message);
     } finally {
       setLoading(false);
     }
@@ -235,17 +251,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       loading,
       authInitialized,
-      isAuthenticated: Boolean(session),
+      isAuthenticated: Boolean(session?.user),
       sessionNotice,
       error,
       signIn,
       signUp,
       signOut,
       refreshSession,
-      clearError: () => setError(null),
-      clearSessionNotice: () => setSessionNotice(null),
+      clearError,
+      clearSessionNotice,
     }),
-    [authInitialized, error, loading, refreshSession, session, sessionNotice, signIn, signOut, signUp],
+    [
+      authInitialized,
+      clearError,
+      clearSessionNotice,
+      error,
+      loading,
+      refreshSession,
+      session,
+      sessionNotice,
+      signIn,
+      signOut,
+      signUp,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

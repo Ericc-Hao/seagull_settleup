@@ -17,7 +17,6 @@ import {
 import { useAppData } from '../context/AppDataContext';
 import { useHomeData } from '../hooks/useHomeData';
 import { useNotifications } from '../context/NotificationsContext';
-import { getPrimaryGroupIdForUser } from '../services/groupService';
 import { formatInvitationMessage } from '../services/invitationService';
 import { colors, layout, typography } from '../theme';
 import { useStaleFocusRefresh } from '../hooks/useStaleFocusRefresh';
@@ -26,7 +25,6 @@ export function HomeScreen() {
   const data = useHomeData();
   const { pendingInvitations } = useAppData();
   const { unreadCount } = useNotifications();
-  const primaryGroupId = getPrimaryGroupIdForUser();
 
   useStaleFocusRefresh({
     types: ['home', 'invitations', 'notifications'],
@@ -138,7 +136,7 @@ export function HomeScreen() {
             <EmptyStateCard
               title="No expenses yet"
               message="Add your first expense to start tracking this month."
-              ctaLabel={primaryGroupId ? 'Add Expense' : 'Create Group'}
+              ctaLabel="Add Expense"
               ctaIcon="document-plus"
               onPress={() => {
                 router.push('/add-expense');

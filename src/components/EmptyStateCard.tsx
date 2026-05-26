@@ -38,7 +38,11 @@ export function EmptyStateCard({
           <Text style={[typography.headline, { textAlign: 'center' }]}>{title}</Text>
           <Text style={[typography.caption, { textAlign: 'center' }]}>{message}</Text>
         </VStack>
-        {ctaLabel && onPress ? <PrimaryButton label={ctaLabel} icon={ctaIcon} onPress={onPress} /> : null}
+        {ctaLabel && onPress ? (
+          <View style={{ width: '100%', marginTop: spacing.lg }}>
+            <PrimaryButton label={ctaLabel} icon={ctaIcon} onPress={onPress} />
+          </View>
+        ) : null}
       </VStack>
     </ShadowSurface>
   );

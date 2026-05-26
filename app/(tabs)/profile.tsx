@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   Icon,
@@ -13,7 +13,7 @@ import {
 import { useAuth } from '../../src/context/AuthContext';
 import { useNotifications } from '../../src/context/NotificationsContext';
 import { useProfileData } from '../../src/hooks/useProfileData';
-import { colors, layout, spacing, typography } from '../../src/theme';
+import { colors, layout, typography } from '../../src/theme';
 
 function valueOrPlaceholder(value?: string | null): string {
   return value?.trim() || 'Not added';
@@ -32,6 +32,7 @@ function SettingsRow({
   onPress,
   showDivider = true,
   danger = false,
+  valueMaxWidth = 150,
 }: {
   label: string;
   value?: string;
@@ -39,62 +40,60 @@ function SettingsRow({
   onPress?: () => void;
   showDivider?: boolean;
   danger?: boolean;
+  valueMaxWidth?: number;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
-        paddingHorizontal: layout.cardPadding,
-        paddingVertical: 15,
-        borderBottomWidth: showDivider ? 1 : 0,
-        borderBottomColor: colors.borderSubtle,
-        opacity: pressed ? 0.72 : 1,
-      })}
+      style={[styles.rowPressable, { borderBottomWidth: showDivider ? 1 : 0 }]}
     >
-      {icon ? (
-        <View
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 10,
-            backgroundColor: danger ? colors.dangerSoft : colors.background,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon name={icon} size={17} color={danger ? colors.danger : colors.textSecondary} strokeWidth={1.7} />
+      <View style={styles.rowContent}>
+        {icon ? (
+          <View
+            style={[
+              styles.settingsIconWrapper,
+              { backgroundColor: danger ? colors.dangerSoft : colors.background },
+            ]}
+          >
+            <Icon name={icon} size={17} color={danger ? colors.danger : colors.textSecondary} strokeWidth={1.7} />
+          </View>
+        ) : null}
+        <View style={styles.settingsLabelContainer}>
+          <Text
+            numberOfLines={1}
+            style={[
+              typography.bodyMedium,
+              {
+                color: danger ? colors.danger : colors.textPrimary,
+              },
+            ]}
+          >
+            {label}
+          </Text>
         </View>
-      ) : null}
-      <Text
-        style={[
-          typography.bodyMedium,
-          {
-            flex: 1,
-            color: danger ? colors.danger : colors.textPrimary,
-          },
-        ]}
-      >
-        {label}
-      </Text>
-      {value ? (
-        <Text
-          style={[
-            typography.body,
-            {
-              color: value === 'Not added' ? colors.textTertiary : colors.textSecondary,
-              maxWidth: 170,
-              textAlign: 'right',
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {value}
-        </Text>
-      ) : null}
-      {onPress ? <Icon name="chevron-right" size={16} color={colors.textTertiary} strokeWidth={1.7} /> : null}
+        {value ? (
+          <View style={[styles.settingsValueContainer, { width: valueMaxWidth }]}>
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={[
+                typography.body,
+                {
+                  color: value === 'Not added' ? colors.textTertiary : colors.textSecondary,
+                  textAlign: 'right',
+                },
+              ]}
+            >
+              {value}
+            </Text>
+          </View>
+        ) : null}
+        {onPress ? (
+          <View style={styles.chevronWrapper}>
+            <Icon name="chevron-right" size={16} color={colors.textTertiary} strokeWidth={1.7} />
+          </View>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -113,23 +112,24 @@ function AvatarRow({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.md,
-        paddingHorizontal: layout.cardPadding,
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.borderSubtle,
-        opacity: pressed ? 0.72 : 1,
-      })}
+      style={[styles.rowPressable, styles.avatarPressable]}
     >
-      <UserAvatar avatarUrl={avatarUrl} displayName={displayName} email={email} size="medium" />
-      <View style={{ flex: 1 }}>
-        <Text style={typography.bodyMedium}>Avatar</Text>
-        <Text style={[typography.caption, { marginTop: 2 }]}>Update profile image</Text>
+      <View style={styles.rowContent}>
+        <View style={styles.avatarWrapper}>
+          <UserAvatar avatarUrl={avatarUrl} displayName={displayName} email={email} size="medium" />
+        </View>
+        <View style={styles.avatarLabelContainer}>
+          <Text numberOfLines={1} style={typography.bodyMedium}>
+            Avatar
+          </Text>
+          <Text numberOfLines={1} style={[typography.caption, { marginTop: 2 }]}>
+            Update profile image
+          </Text>
+        </View>
+        <View style={styles.chevronWrapper}>
+          <Icon name="chevron-right" size={16} color={colors.textTertiary} strokeWidth={1.7} />
+        </View>
       </View>
-      <Icon name="chevron-right" size={16} color={colors.textTertiary} strokeWidth={1.7} />
     </Pressable>
   );
 }
@@ -151,9 +151,11 @@ export default function ProfileScreen() {
         />
       }
     >
-      <View style={{ gap: layout.sectionGap }}>
-        <View style={{ gap: layout.cardGap }}>
-          <SectionTitle title="Account" />
+      <View>
+        <View style={styles.section}>
+          <View style={styles.sectionTitleWrapper}>
+            <SectionTitle title="Account" />
+          </View>
           <SectionCard>
             <AvatarRow
               displayName={profile?.displayName}
@@ -165,63 +167,76 @@ export default function ProfileScreen() {
               icon="user"
               label="Display Name"
               value={valueOrPlaceholder(profile?.displayName)}
+              valueMaxWidth={140}
               onPress={() => router.push('/edit-profile')}
             />
             <SettingsRow
               icon="envelope"
               label="Email"
               value={valueOrPlaceholder(profile?.email)}
+              valueMaxWidth={160}
               showDivider
             />
             <SettingsRow
               icon="wallet"
               label="Phone"
               value={valueOrPlaceholder(profile?.phone)}
+              valueMaxWidth={150}
               onPress={() => router.push('/edit-profile')}
               showDivider={false}
             />
           </SectionCard>
         </View>
 
-        <View style={{ gap: layout.cardGap }}>
-          <SectionTitle title="Payment Info" />
+        <View style={styles.section}>
+          <View style={styles.sectionTitleWrapper}>
+            <SectionTitle title="Payment Info" />
+          </View>
           <SectionCard>
             <SettingsRow
               icon="envelope"
               label="EMT Email"
               value={valueOrPlaceholder(profile?.emtEmail)}
+              valueMaxWidth={160}
               onPress={() => router.push('/edit-profile')}
             />
             <SettingsRow
               icon="wallet"
               label="EMT Phone"
               value={valueOrPlaceholder(profile?.emtPhone)}
+              valueMaxWidth={150}
               onPress={() => router.push('/edit-profile')}
             />
             <SettingsRow
               icon="banknotes"
               label="Preferred Method"
               value={methodLabel(profile?.preferredEmtMethod)}
+              valueMaxWidth={150}
               onPress={() => router.push('/edit-profile')}
               showDivider={false}
             />
           </SectionCard>
         </View>
 
-        <View style={{ gap: layout.cardGap }}>
-          <SectionTitle title="Preferences" />
+        <View style={styles.section}>
+          <View style={styles.sectionTitleWrapper}>
+            <SectionTitle title="Preferences" />
+          </View>
           <SectionCard>
             <SettingsRow
               icon="currency-dollar"
               label="Default Currency"
               value={profile?.defaultCurrency ?? 'CAD'}
+              valueMaxWidth={80}
               showDivider={false}
             />
           </SectionCard>
         </View>
 
-        <View style={{ gap: layout.cardGap }}>
-          <SectionTitle title="Actions" />
+        <View>
+          <View style={styles.sectionTitleWrapper}>
+            <SectionTitle title="Actions" />
+          </View>
           <SectionCard>
             <SettingsRow
               icon="pencil-square"
@@ -241,3 +256,66 @@ export default function ProfileScreen() {
     </ScreenLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  section: {
+    marginBottom: layout.sectionGap,
+  },
+  sectionTitleWrapper: {
+    marginBottom: layout.cardGap,
+  },
+  rowPressable: {
+    width: '100%',
+    alignSelf: 'stretch',
+    minHeight: 56,
+    paddingHorizontal: layout.cardPadding,
+    paddingVertical: 12,
+    borderBottomColor: colors.borderSubtle,
+  },
+  avatarPressable: {
+    minHeight: 64,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  rowContent: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingsIconWrapper: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  settingsLabelContainer: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+  },
+  settingsValueContainer: {
+    marginLeft: 8,
+    flexShrink: 1,
+    alignItems: 'flex-end',
+  },
+  chevronWrapper: {
+    width: 18,
+    marginLeft: 6,
+    alignItems: 'flex-end',
+    flexShrink: 0,
+  },
+  avatarWrapper: {
+    marginRight: 12,
+    flexShrink: 0,
+  },
+  avatarLabelContainer: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+  },
+});

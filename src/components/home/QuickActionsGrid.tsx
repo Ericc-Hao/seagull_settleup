@@ -9,9 +9,12 @@ import { Icon } from '../Icon';
 import { colors, shadows, typography } from '../../theme';
 
 const CARD_RADIUS = 22;
-const CARD_PADDING = 18;
+const CARD_PADDING_X = 16;
+const CARD_PADDING_TOP = 20;
+const CARD_PADDING_BOTTOM = 26;
+const DIVIDER_INSET = 12;
 const ICON_SIZE = 36;
-const ROW_MIN_HEIGHT = 72;
+const ROW_HEIGHT = 90;
 
 export interface QuickActionItem {
   id: string;
@@ -30,21 +33,28 @@ export function QuickActionsGrid({
 
   return (
     <View style={styles.container}>
-      {rows.map((row, rowIndex) => (
-        <View
-          key={rowIndex}
-          style={[styles.row, rowIndex > 0 ? styles.rowDivider : null]}
-        >
-          {row.length > 1 ? <View pointerEvents="none" style={styles.verticalDivider} /> : null}
-          {row.map((action) => (
-            <QuickActionCell
-              key={action.id}
-              action={action}
-              onPress={() => onAction(action.id)}
-            />
-          ))}
-        </View>
-      ))}
+      <View style={styles.grid}>
+        {rows.map((row, rowIndex) => (
+          <View
+            key={rowIndex}
+            style={styles.row}
+          >
+            {row.map((action) => (
+              <View
+                key={action.id}
+                style={styles.cellFrame}
+              >
+                <QuickActionCell
+                  action={action}
+                  onPress={() => onAction(action.id)}
+                />
+              </View>
+            ))}
+          </View>
+        ))}
+        <View pointerEvents="none" style={styles.verticalDivider} />
+        <View pointerEvents="none" style={styles.horizontalDivider} />
+      </View>
     </View>
   );
 }
@@ -61,29 +71,36 @@ function QuickActionCell({
       onPress={onPress}
       style={({ pressed }) => [styles.cell, { opacity: pressed ? 0.75 : 1 }]}
     >
-      <View style={styles.iconWrap}>
-        <Icon name={action.icon} size={18} color={colors.primary} strokeWidth={1.5} />
-      </View>
-      <View style={styles.labelWrap}>
-        <Text numberOfLines={2} ellipsizeMode="tail" style={styles.label}>
-          {action.label}
-        </Text>
+      <View style={styles.cellContent}>
+        <View style={styles.iconWrap}>
+          <Icon name={action.icon} size={18} color={colors.primary} strokeWidth={1.5} />
+        </View>
+        <View style={styles.labelWrap}>
+          <Text numberOfLines={2} ellipsizeMode="tail" style={styles.label}>
+            {action.label}
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
 }
 
-const cellBase: ViewStyle = {
+const cellFrameBase: ViewStyle = {
   width: '50%',
   minWidth: 0,
   maxWidth: '50%',
   flexGrow: 0,
   flexShrink: 0,
+};
+
+const cellBase: ViewStyle = {
+  width: '100%',
+  height: '100%',
   alignItems: 'center',
   justifyContent: 'center',
-  paddingVertical: 12,
+  paddingVertical: 10,
   paddingHorizontal: 8,
-  minHeight: ROW_MIN_HEIGHT,
+  minHeight: ROW_HEIGHT,
   overflow: 'hidden',
 };
 
@@ -92,31 +109,48 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: colors.white,
     borderRadius: CARD_RADIUS,
-    padding: CARD_PADDING,
+    paddingTop: CARD_PADDING_TOP,
+    paddingBottom: CARD_PADDING_BOTTOM,
+    paddingHorizontal: CARD_PADDING_X,
     borderWidth: 1,
     borderColor: colors.tertiary,
     ...shadows.cardSoft,
   },
+  grid: {
+    width: '100%',
+    position: 'relative',
+  },
   row: {
     flexDirection: 'row',
     width: '100%',
-    minHeight: ROW_MIN_HEIGHT,
-    position: 'relative',
-  },
-  rowDivider: {
-    borderTopWidth: 1,
-    borderTopColor: colors.tertiary,
+    height: ROW_HEIGHT,
   },
   verticalDivider: {
     position: 'absolute',
     left: '50%',
-    top: 8,
-    bottom: 8,
+    top: DIVIDER_INSET,
+    bottom: DIVIDER_INSET,
     width: 1,
     marginLeft: -0.5,
     backgroundColor: colors.tertiary,
   },
+  horizontalDivider: {
+    position: 'absolute',
+    left: DIVIDER_INSET,
+    right: DIVIDER_INSET,
+    top: ROW_HEIGHT,
+    height: 1,
+    marginTop: -0.5,
+    backgroundColor: colors.tertiary,
+  },
+  cellFrame: cellFrameBase,
   cell: cellBase,
+  cellContent: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+  },
   iconWrap: {
     width: ICON_SIZE,
     height: ICON_SIZE,
@@ -124,19 +158,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   labelWrap: {
     width: '100%',
+    maxWidth: 104,
     alignItems: 'center',
     overflow: 'hidden',
-    marginTop: 6,
+    marginTop: 9,
   },
   label: {
     ...typography.caption,
     width: '100%',
     textAlign: 'center',
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: '600',
     color: colors.textPrimary,
   },

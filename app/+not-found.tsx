@@ -4,9 +4,9 @@ import { useAuth } from '../src/context/AuthContext';
 import { AuthLoadingScreen } from '../src/screens/AuthScreens';
 
 export default function NotFound() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, authInitialized } = useAuth();
 
-  if (loading) {
+  if (!authInitialized) {
     return <AuthLoadingScreen />;
   }
 

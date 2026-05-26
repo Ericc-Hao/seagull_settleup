@@ -10,7 +10,7 @@ import {
   toUserFriendlyAuthError,
 } from '../utils/authErrors';
 import { createLogger } from '../utils/logger';
-import { maskEmail } from '../utils/validation';
+import { maskEmail, normalizeEmail } from '../utils/validation';
 import { updateAvatar } from './profileService';
 
 const logger = createLogger('authService');
@@ -104,7 +104,7 @@ export async function signInWithEmail(
   email: string,
   password: string,
 ): Promise<{ user: User; session: Session }> {
-  const normalizedEmail = email.trim();
+  const normalizedEmail = normalizeEmail(email);
   logger.info('Sign in started', { email: maskEmail(normalizedEmail), table: 'auth.users' });
 
   try {

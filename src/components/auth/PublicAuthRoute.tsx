@@ -8,7 +8,7 @@ import { setPendingInviteToken } from '../../lib/pendingInviteToken';
 import { AuthLoadingScreen } from '../../screens/AuthScreens';
 
 export function PublicAuthRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, authInitialized } = useAuth();
   const inviteToken = useInviteRouteParam();
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export function PublicAuthRoute({ children }: { children: ReactNode }) {
     }
   }, [inviteToken]);
 
-  if (loading) {
+  if (!authInitialized) {
     return <AuthLoadingScreen />;
   }
 

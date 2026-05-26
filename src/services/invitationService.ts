@@ -25,6 +25,7 @@ import {
 import { findProfileByEmail } from './profileService';
 
 const logger = createLogger('invitationService');
+const INVITATION_LINK_GENERATION_ERROR = 'Invitation link could not be generated. Please try again.';
 
 export interface InvitationEmailResult {
   invitationId: string;
@@ -289,18 +290,6 @@ export async function getInvitationViewById(invitationId: string): Promise<Pendi
   return getInvitationDetail(invitationId);
 }
 
-function createInviteToken(): string {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-  if (globalThis.crypto?.getRandomValues) {
-    const bytes = new Uint8Array(24);
-    globalThis.crypto.getRandomValues(bytes);
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  }
-  throw new Error('Secure random token generation is not available on this device.');
-}
-
 async function getAuthenticatedUserId(): Promise<string> {
   const { data, error } = await supabase.auth.getUser();
   if (error) {
@@ -443,11 +432,10 @@ export async function createGroupInvitation(
         invited_user_id: invitedUserId,
         group_member_id: member.id,
         status: 'pending',
-        token: createInviteToken(),
         message: input.message?.trim() || null,
         expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
       })
-      .select('*')
+      .select(GROUP_INVITATION_COLUMNS)
       .single();
 
     if (invitationError) {
@@ -455,6 +443,15 @@ export async function createGroupInvitation(
     }
 
     const invitation = mapGroupInvitation(invitationRow);
+    if (!invitation.token) {
+      logger.warn('Create invitation returned without token', {
+        table: 'group_invitations',
+        groupId: input.groupId,
+        invitationId: invitation.id,
+        email: maskEmail(invitedEmail),
+      });
+      throw new Error(INVITATION_LINK_GENERATION_ERROR);
+    }
     logger.info('Create invitation succeeded', {
       table: 'group_invitations',
       groupId: input.groupId,
@@ -464,11 +461,25 @@ export async function createGroupInvitation(
     });
     return { member, invitation };
   } catch (error) {
-    logger.error('Create invitation failed', error, {
-      table: 'group_invitations',
-      groupId: input.groupId,
-      email: maskEmail(invitedEmail),
-    });
+    const handledLinkGenerationError =
+      error instanceof Error && error.message === INVITATION_LINK_GENERATION_ERROR;
+    if (handledLinkGenerationError) {
+      logger.warn(
+        'Create invitation failed because token was not returned',
+        {
+          table: 'group_invitations',
+          groupId: input.groupId,
+          email: maskEmail(invitedEmail),
+        },
+        error,
+      );
+    } else {
+      logger.error('Create invitation failed', error, {
+        table: 'group_invitations',
+        groupId: input.groupId,
+        email: maskEmail(invitedEmail),
+      });
+    }
     throw error;
   }
 }

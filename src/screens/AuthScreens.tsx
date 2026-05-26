@@ -1,8 +1,18 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import type { ReactNode } from 'react';
-import { Children, Fragment, isValidElement, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Children, Fragment, isValidElement, useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type KeyboardTypeOptions,
+  type TextInputProps,
+} from 'react-native';
 
 import { PrimaryButton, AppLogo, ScreenLayout, SecondaryButton } from '../components';
 import { InvitationContextCard } from '../components/invitations/InvitationContextCard';
@@ -13,6 +23,7 @@ import { useInviteRouteParam } from '../hooks/useInviteRouteParam';
 import { setPendingInviteToken } from '../lib/pendingInviteToken';
 import { colors, layout, radii, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
+import { toUserFriendlyAuthError } from '../utils/authErrors';
 import { maskEmail, normalizeEmail } from '../utils/validation';
 import { safeBack } from '../utils/navigation';
 
@@ -30,7 +41,7 @@ function flattenAuthChildren(children: ReactNode): ReactNode[] {
       return;
     }
 
-    if (isValidElement(child) && child.type === Fragment) {
+    if (isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment) {
       items.push(...flattenAuthChildren(child.props.children));
       return;
     }
@@ -122,6 +133,9 @@ function AuthInput({
   disabled = false,
   helperText,
   placeholder,
+  keyboardType = 'default',
+  textContentType,
+  autoComplete,
 }: {
   label: string;
   value: string;
@@ -131,6 +145,9 @@ function AuthInput({
   disabled?: boolean;
   helperText?: string;
   placeholder?: string;
+  keyboardType?: KeyboardTypeOptions;
+  textContentType?: TextInputProps['textContentType'];
+  autoComplete?: TextInputProps['autoComplete'];
 }) {
   return (
     <View
@@ -152,6 +169,10 @@ function AuthInput({
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
+        spellCheck={false}
+        keyboardType={keyboardType}
+        textContentType={textContentType}
+        autoComplete={autoComplete}
         editable={!disabled}
         selectTextOnFocus={!disabled}
         placeholder={placeholder}
@@ -183,6 +204,14 @@ function ErrorText({ message }: { message?: string | null }) {
       {message}
     </Text>
   );
+}
+
+function screenAuthError(error: unknown): string {
+  const friendly = toUserFriendlyAuthError(error);
+  if (friendly !== 'Something went wrong. Please try again.') {
+    return friendly;
+  }
+  return error instanceof Error ? error.message : friendly;
 }
 
 function NoticeText({ message, onDismiss }: { message: string; onDismiss: () => void }) {
@@ -294,13 +323,27 @@ export function WelcomeScreen() {
 }
 
 export function LoginScreen() {
-  const { signIn, error, clearError, loading, sessionNotice, clearSessionNotice } = useAuth();
+  const { signIn, clearError, loading, sessionNotice, clearSessionNotice } = useAuth();
   const inviteToken = useInviteRouteParam();
   const { preview, loading: previewLoading, fetchFailed, isPendingInvite } = useInvitationPreview(inviteToken);
   const [email, setEmail] = useState('');
   const [emailLocked, setEmailLocked] = useState(false);
   const [password, setPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      clearError();
+      setValidation(null);
+      setLocalError(null);
+      return () => {
+        clearError();
+        setValidation(null);
+        setLocalError(null);
+      };
+    }, [clearError]),
+  );
 
   useEffect(() => {
     authUiLogger.info('Login screen invite token detected', {
@@ -331,6 +374,7 @@ export function LoginScreen() {
 
   const submit = async () => {
     clearError();
+    setLocalError(null);
     const loginEmail = emailLocked && preview?.invitedEmail ? preview.invitedEmail : email.trim();
 
     if (!loginEmail) {
@@ -351,7 +395,11 @@ export function LoginScreen() {
     }
     setValidation(null);
     authUiLogger.info('Login submit started', { email: maskEmail(loginEmail) });
-    await signIn(loginEmail, password);
+    try {
+      await signIn(loginEmail, password);
+    } catch (error) {
+      setLocalError(screenAuthError(error));
+    }
   };
 
   return (
@@ -369,6 +417,9 @@ export function LoginScreen() {
         onChangeText={setEmail}
         disabled={emailLocked}
         placeholder="you@example.com"
+        keyboardType="email-address"
+        textContentType="username"
+        autoComplete="email"
         helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
       />
       <AuthInput
@@ -377,9 +428,11 @@ export function LoginScreen() {
         onChangeText={setPassword}
         secureTextEntry
         placeholder="Enter your password"
+        textContentType="password"
+        autoComplete="current-password"
       />
       {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
-      <ErrorText message={validation ?? error} />
+      <ErrorText message={validation ?? localError} />
       <PrimaryButton
         label={loading ? 'Logging In...' : 'Log In'}
         onPress={() => void submit()}
@@ -395,7 +448,7 @@ export function LoginScreen() {
 }
 
 export function RegisterScreen() {
-  const { signUp, error, clearError, loading } = useAuth();
+  const { signUp, clearError, loading } = useAuth();
   const inviteToken = useInviteRouteParam();
   const { preview, loading: previewLoading, fetchFailed, isPendingInvite } = useInvitationPreview(inviteToken);
   const [displayName, setDisplayName] = useState('');
@@ -406,6 +459,20 @@ export function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      clearError();
+      setValidation(null);
+      setLocalError(null);
+      return () => {
+        clearError();
+        setValidation(null);
+        setLocalError(null);
+      };
+    }, [clearError]),
+  );
 
   useEffect(() => {
     authUiLogger.info('Register invite token detected', {
@@ -447,6 +514,7 @@ export function RegisterScreen() {
 
   const submit = async () => {
     clearError();
+    setLocalError(null);
     const registrationEmail = emailLocked && preview?.invitedEmail ? preview.invitedEmail : email.trim();
 
     if (!displayName.trim()) {
@@ -473,13 +541,17 @@ export function RegisterScreen() {
       authUiLogger.info('Register submit started', { email: maskEmail(registrationEmail) });
     }
 
-    await signUp({
-      email: registrationEmail,
-      password,
-      displayName,
-      phone: phone.trim() || undefined,
-      avatarUri,
-    });
+    try {
+      await signUp({
+        email: registrationEmail,
+        password,
+        displayName,
+        phone: phone.trim() || undefined,
+        avatarUri,
+      });
+    } catch (error) {
+      setLocalError(screenAuthError(error));
+    }
   };
 
   return (
@@ -516,17 +588,29 @@ export function RegisterScreen() {
             onChangeText={setEmail}
             disabled={emailLocked}
             placeholder="you@example.com"
+            keyboardType="email-address"
+            textContentType="username"
+            autoComplete="email"
             helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
           />
           <AuthInput label="Phone (optional)" value={phone} onChangeText={setPhone} placeholder="Optional" />
-          <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+          <AuthInput
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            textContentType="newPassword"
+            autoComplete="new-password"
+          />
           <AuthInput
             label="Confirm Password"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
+            textContentType="newPassword"
+            autoComplete="new-password"
           />
-          <ErrorText message={validation ?? error} />
+          <ErrorText message={validation ?? localError} />
           <PrimaryButton
             label={loading ? 'Creating Account...' : 'Create Account'}
             onPress={() => void submit()}

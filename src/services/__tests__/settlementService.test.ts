@@ -639,7 +639,6 @@ describe('team settlement covered balances', () => {
           groupId: 'group-team',
           mode: 'team',
           fromMemberId: 'member-eric',
-          toMemberId: null,
           amountCents: 0,
           currency: 'CAD',
           status: 'paid',

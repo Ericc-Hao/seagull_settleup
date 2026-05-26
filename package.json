@@ -44,6 +44,10 @@
     "upload:email-icon": "npx tsx scripts/upload-email-icon.ts"
   },
   "private": true,
+  "engines": {
+    "node": "24.3.0",
+    "npm": ">=10"
+  },
   "overrides": {
     "uuid": "^11.1.0"
   }

@@ -2,6 +2,47 @@
 
 Seagull Split — React Native + Expo + TypeScript expense splitting app backed by Supabase.
 
+## Development environment
+
+Required:
+
+- Node.js 24.3.0
+- npm
+
+Using nvm:
+
+```bash
+nvm install 24.3.0
+nvm use 24.3.0
+npm ci
+```
+
+Using asdf:
+
+```bash
+asdf plugin add nodejs
+asdf install nodejs 24.3.0
+asdf local nodejs 24.3.0
+npm ci
+```
+
+Then run:
+
+```bash
+npm start
+```
+
+For web build:
+
+```bash
+npm run web:build
+npm run web:preview
+```
+
+Node 20 should not be used because Supabase Realtime may fail during Expo static export due to WebSocket support.
+
+Version pins: `.nvmrc` and `.node-version` both specify `24.3.0`. GitHub Actions uses the same version for web deployment.
+
 ## Logging Standard
 
 Use the shared logger for all application logging. Do not use raw `console.log` outside `src/utils/logger.ts`.
@@ -134,7 +175,7 @@ The deploy workflow writes `dist/CNAME`, `dist/.nojekyll`, and copies `dist/inde
 
 ### Build locally
 
-GitHub Pages web build requires **Node 23+** (the workflow uses **23.11.0**) because Supabase Realtime needs native WebSocket support during Expo static export (`npx expo export -p web`).
+Use **Node.js 24.3.0** (same as CI). See [Development environment](#development-environment) for setup with nvm or asdf.
 
 ```bash
 npm run web:build

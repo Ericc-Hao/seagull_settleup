@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 
-import { colors, layout, shadows, typography } from '../../theme';
+import { colors, layout, typography } from '../../theme';
+import { ShadowSurface } from './ShadowSurface';
 
 export interface SummaryStat {
   label: string;
@@ -13,7 +14,6 @@ export function SummaryOverviewCard({
   primaryLabel,
   primaryValue,
   stats,
-  showMascot = false,
 }: {
   title: string;
   primaryLabel: string;
@@ -22,20 +22,16 @@ export function SummaryOverviewCard({
   showMascot?: boolean;
 }) {
   return (
-    <View
-      style={{
-        width: '100%',
-        borderRadius: layout.cardRadius,
-        overflow: 'hidden',
-        backgroundColor: colors.white,
+    <ShadowSurface
+      shadow="cardSoft"
+      innerStyle={{
+        padding: layout.cardPadding,
         borderWidth: 1,
         borderColor: colors.borderSubtle,
-        padding: layout.cardPadding,
-        ...shadows.cardSoft,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        <View style={{ flex: 1, paddingRight: 0 }}>
+        <View style={{ flex: 1 }}>
           <Text style={typography.sectionTitle}>{title}</Text>
           <Text style={[typography.caption, { marginTop: layout.cardGap, color: colors.textSecondary }]}>
             {primaryLabel}
@@ -52,7 +48,7 @@ export function SummaryOverviewCard({
           ) : null}
         </View>
       </View>
-    </View>
+    </ShadowSurface>
   );
 }
 

@@ -133,6 +133,43 @@ If `EMAIL_ICON_URL` is missing, the email uses a text logo mark (`SS`). When the
 - In-app UI uses `AppLogo` with the local `assets/icon.png`.
 - User avatars still use `UserAvatar` / profile photos / initials — not the app logo.
 
+### Native app icon and splash (iOS / Android)
+
+Icon and splash are configured in `app.json` to use `assets/icon.png` with background `#EEF1FF`.
+
+After changing icon or splash assets, clear Metro cache:
+
+```bash
+npx expo start -c
+```
+
+If the simulator or device still shows an old icon or splash:
+
+```bash
+npx expo prebuild --clean
+npx expo run:ios
+```
+
+**Expo Go note:** Expo Go may show Expo-related splash behavior. A development build (`npx expo run:ios`) or production build is required to fully verify custom app icon and splash screen on native.
+
+### iOS auth testing checklist
+
+```bash
+npx expo start -c
+# For full native icon/splash verification:
+npx expo prebuild --clean && npx expo run:ios
+```
+
+Verify on iOS simulator:
+
+1. Splash/loading uses `assets/icon.png`
+2. Welcome, Login, and Register use `AppLogo` (`assets/icon.png`)
+3. Register screen scrolls; Create Account button and footer link are reachable
+4. Login button stays visible when the keyboard is open
+5. Wrong credentials show inline error — no redbox
+6. Expired refresh token clears session and shows login with optional notice
+7. `npm run web:build` still passes
+
 ## Web deployment (GitHub Pages)
 
 Production web URL: [https://split.seagullcoffee.ca](https://split.seagullcoffee.ca)

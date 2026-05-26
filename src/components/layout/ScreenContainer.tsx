@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import { ScrollView, StyleProp, View, ViewStyle } from 'react-native';
 import { Edge, SafeAreaView } from 'react-native-safe-area-context';
 
-import { colors, layout } from '../../theme';
+import { colors, layout, screenBackgroundStyle } from '../../theme';
 
 export type ScreenContainerProps = {
   children: ReactNode;
@@ -14,12 +14,12 @@ export type ScreenContainerProps = {
   bottomTabPadding?: boolean;
 };
 
-export const screenRootStyle = { flex: 1, backgroundColor: colors.background } as const;
+export const screenRootStyle = screenBackgroundStyle;
 
 export function ScreenContainer({
   children,
   scrollable = false,
-  edges = ['top', 'left', 'right', 'bottom'],
+  edges = ['top', 'left', 'right'],
   style,
   contentContainerStyle,
   withHorizontalPadding = false,
@@ -34,6 +34,7 @@ export function ScreenContainer({
         <ScrollView
           style={screenRootStyle}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={[
             {
               flexGrow: 1,
@@ -52,7 +53,18 @@ export function ScreenContainer({
 
   return (
     <SafeAreaView style={[screenRootStyle, style]} edges={edges}>
-      <View style={[screenRootStyle, { paddingHorizontal, paddingBottom }, contentContainerStyle]}>{children}</View>
+      <View
+        style={[
+          screenRootStyle,
+          {
+            paddingHorizontal,
+            paddingBottom,
+          },
+          contentContainerStyle,
+        ]}
+      >
+        {children}
+      </View>
     </SafeAreaView>
   );
 }

@@ -1,9 +1,14 @@
 import type { Session, User } from '@supabase/supabase-js';
 
 import { clearCachedUserId, setCachedUserId } from '../lib/auth';
+import { resetAppDataCache } from '../context/appDataBridge';
 import { clearSupabaseAuthStorage } from '../lib/authStorage';
 import { supabase } from '../lib/supabase';
-import { isJwtTimingError } from '../utils/authErrors';
+import {
+  isInvalidCredentialsError,
+  isRecoverableAuthSessionError,
+  toUserFriendlyAuthError,
+} from '../utils/authErrors';
 import { createLogger } from '../utils/logger';
 import { maskEmail } from '../utils/validation';
 import { updateAvatar } from './profileService';
@@ -16,6 +21,20 @@ interface SignUpInput {
   displayName: string;
   phone?: string;
   avatarUri?: string;
+}
+
+export class AuthValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthValidationError';
+  }
+}
+
+export async function clearLocalAuthSession(): Promise<void> {
+  logger.info('Clear local auth session started', { table: 'auth.users' });
+  await signOutLocal();
+  resetAppDataCache();
+  logger.info('Clear local auth session succeeded', { table: 'auth.users' });
 }
 
 export async function signUpWithEmail(input: SignUpInput): Promise<{ user: User | null; session: Session | null }> {
@@ -95,6 +114,10 @@ export async function signInWithEmail(
     });
 
     if (error) {
+      if (isInvalidCredentialsError(error)) {
+        logger.warn('Sign in failed', { reason: 'invalid_credentials', table: 'auth.users' });
+        throw new AuthValidationError(toUserFriendlyAuthError(error));
+      }
       throw error;
     }
     if (!data.user || !data.session) {
@@ -105,6 +128,13 @@ export async function signInWithEmail(
     logger.info('Sign in succeeded', { userId: data.user.id, table: 'auth.users' });
     return { user: data.user, session: data.session };
   } catch (error) {
+    if (error instanceof AuthValidationError) {
+      throw error;
+    }
+    if (isInvalidCredentialsError(error)) {
+      logger.warn('Sign in failed', { reason: 'invalid_credentials', table: 'auth.users' });
+      throw new AuthValidationError(toUserFriendlyAuthError(error));
+    }
     logger.error('Sign in failed', error, { email: maskEmail(normalizedEmail), table: 'auth.users' });
     throw error;
   }
@@ -139,7 +169,7 @@ export async function signOutLocal(): Promise<void> {
     }
   } catch (error) {
     logger.warn('Local sign out via Supabase failed, clearing auth storage fallback', {
-      reason: isJwtTimingError(error) ? 'jwt_timing_error' : 'sign_out_failed',
+      reason: isRecoverableAuthSessionError(error) ? 'recoverable_session_error' : 'sign_out_failed',
     });
     await clearSupabaseAuthStorage();
   }
@@ -153,9 +183,9 @@ export async function refreshAuthSession(): Promise<Session | null> {
   try {
     const { data, error } = await supabase.auth.refreshSession();
     if (error) {
-      if (isJwtTimingError(error)) {
-        logger.warn('Auth session refresh failed due to JWT timing error', {
-          reason: 'jwt_timing_error',
+      if (isRecoverableAuthSessionError(error)) {
+        logger.warn('Auth session refresh failed due to recoverable session error', {
+          reason: 'recoverable_session_error',
           table: 'auth.users',
         });
       } else {
@@ -174,7 +204,7 @@ export async function refreshAuthSession(): Promise<Session | null> {
     });
     return data.session;
   } catch (error) {
-    if (!isJwtTimingError(error)) {
+    if (!isRecoverableAuthSessionError(error)) {
       logger.error('Auth session refresh failed', error, { table: 'auth.users' });
     }
     throw error;
@@ -183,18 +213,26 @@ export async function refreshAuthSession(): Promise<Session | null> {
 
 export async function restoreAuthSession(): Promise<{
   session: Session | null;
-  invalidatedDueToJwt: boolean;
+  invalidatedDueToRecoverableError: boolean;
 }> {
   logger.info('Auth session restore started', { table: 'auth.users' });
   try {
     const { data, error } = await supabase.auth.getSession();
     if (error) {
+      if (isRecoverableAuthSessionError(error)) {
+        logger.warn('Auth session restore failed due to recoverable session error', {
+          reason: 'recoverable_session_error',
+          table: 'auth.users',
+        });
+        await clearLocalAuthSession();
+        return { session: null, invalidatedDueToRecoverableError: true };
+      }
       throw error;
     }
 
     if (!data.session) {
       logger.info('Auth session restore succeeded', { hasSession: false, table: 'auth.users' });
-      return { session: null, invalidatedDueToJwt: false };
+      return { session: null, invalidatedDueToRecoverableError: false };
     }
 
     try {
@@ -203,19 +241,27 @@ export async function restoreAuthSession(): Promise<{
         hasSession: Boolean(refreshedSession),
         table: 'auth.users',
       });
-      return { session: refreshedSession, invalidatedDueToJwt: false };
+      return { session: refreshedSession, invalidatedDueToRecoverableError: false };
     } catch (refreshError) {
-      if (isJwtTimingError(refreshError)) {
+      if (isRecoverableAuthSessionError(refreshError)) {
         logger.warn('Local sign out due to invalid session during restore', {
-          reason: 'jwt_timing_error',
+          reason: 'recoverable_session_error',
           table: 'auth.users',
         });
-        await signOutLocal();
-        return { session: null, invalidatedDueToJwt: true };
+        await clearLocalAuthSession();
+        return { session: null, invalidatedDueToRecoverableError: true };
       }
       throw refreshError;
     }
   } catch (error) {
+    if (isRecoverableAuthSessionError(error)) {
+      logger.warn('Auth session restore failed due to recoverable session error', {
+        reason: 'recoverable_session_error',
+        table: 'auth.users',
+      });
+      await clearLocalAuthSession();
+      return { session: null, invalidatedDueToRecoverableError: true };
+    }
     logger.error('Auth session restore failed', error, { table: 'auth.users' });
     throw error;
   }

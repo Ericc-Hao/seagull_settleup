@@ -1,25 +1,49 @@
 import { describe, expect, it } from 'vitest';
 
-import { isJwtTimingError } from '../authErrors';
+import {
+  isInvalidCredentialsError,
+  isRecoverableAuthSessionError,
+  toUserFriendlyAuthError,
+} from '../authErrors';
 
-describe('authErrors', () => {
-  it('detects JWT issued at future errors', () => {
-    expect(isJwtTimingError(new Error('JWT issued at future'))).toBe(true);
+describe('isRecoverableAuthSessionError', () => {
+  it('detects AuthApiError refresh token message', () => {
+    expect(
+      isRecoverableAuthSessionError({
+        name: 'AuthApiError',
+        message: 'Invalid Refresh Token: Refresh Token Not Found',
+      }),
+    ).toBe(true);
   });
 
-  it('detects expired JWT errors', () => {
-    expect(isJwtTimingError({ message: 'JWT expired' })).toBe(true);
+  it('detects invalid login credentials as non-recoverable session', () => {
+    expect(isRecoverableAuthSessionError(new Error('Invalid login credentials'))).toBe(false);
+  });
+});
+
+describe('isInvalidCredentialsError', () => {
+  it('detects invalid login credentials', () => {
+    expect(isInvalidCredentialsError(new Error('Invalid login credentials'))).toBe(true);
+  });
+});
+
+describe('toUserFriendlyAuthError', () => {
+  it('maps invalid login credentials', () => {
+    expect(toUserFriendlyAuthError(new Error('Invalid login credentials'))).toBe('Invalid email or password.');
   });
 
-  it('detects invalid JWT errors', () => {
-    expect(isJwtTimingError({ message: 'invalid JWT' })).toBe(true);
+  it('maps refresh token failures', () => {
+    expect(toUserFriendlyAuthError(new Error('Invalid Refresh Token'))).toBe(
+      'Your session expired. Please log in again.',
+    );
+    expect(toUserFriendlyAuthError(new Error('Refresh Token Not Found'))).toBe(
+      'Your session expired. Please log in again.',
+    );
   });
 
-  it('detects refresh token errors', () => {
-    expect(isJwtTimingError({ message: 'refresh_token_not_found' })).toBe(true);
-  });
-
-  it('returns false for unrelated errors', () => {
-    expect(isJwtTimingError(new Error('Network request failed'))).toBe(false);
+  it('maps network failures', () => {
+    expect(toUserFriendlyAuthError(new Error('Network request failed'))).toBe(
+      'Could not connect. Please check your network.',
+    );
   });
 });

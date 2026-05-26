@@ -3,6 +3,7 @@ import { colors } from '../theme';
 export const stackScreenOptions = {
   headerShown: false,
   contentStyle: {
+    flex: 1,
     backgroundColor: colors.background,
   },
 } as const;

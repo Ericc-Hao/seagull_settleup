@@ -5,6 +5,7 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import '../global.css';
+import { installExpectedAuthErrorHandlers } from '../src/lib/expectedAuthErrors';
 import { InviteTokenHandler } from '../src/components/invitations/InviteTokenHandler';
 import { colors } from '../src/theme';
 import { AppDataProvider } from '../src/context/AppDataContext';
@@ -52,6 +53,8 @@ function AuthenticatedShell({ children }: { children: ReactNode }) {
 }
 
 export default function RootLayout() {
+  installExpectedAuthErrorHandlers();
+
   return (
     <SafeAreaProvider style={styles.root}>
       <View style={styles.root}>

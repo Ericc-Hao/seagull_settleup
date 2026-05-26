@@ -21,7 +21,7 @@ import {
   markNotificationAsRead,
 } from '../services/notificationService';
 import type { Notification } from '../types/models';
-import { isJwtTimingError } from '../utils/authErrors';
+import { isRecoverableAuthSessionError } from '../utils/authErrors';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
 
@@ -113,11 +113,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (isJwtTimingError(err)) {
-        logger.warn('Notifications fetch failed due to JWT timing error', {
-          reason: 'jwt_timing_error',
+      if (isRecoverableAuthSessionError(err)) {
+        logger.warn('Notifications fetch failed due to recoverable session error', {
+          reason: 'recoverable_session_error',
         });
-        await signOut({ local: true, reason: 'jwt_timing_error' });
+        await signOut({ local: true, reason: 'recoverable_session_error' });
         clearNotificationState(setNotifications, setUnreadCount, setInitialLoading);
         return;
       }

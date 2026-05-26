@@ -5,9 +5,10 @@ import {
   HomeSplitGroupCard,
   EmptyStateCard,
   HomeHeader,
-  PrimaryButtonRow,
+  PrimaryButton,
   QuickActionsGrid,
   ScreenLayout,
+  SecondaryButton,
   SectionCard,
   SectionRow,
   SectionTitle,
@@ -90,78 +91,96 @@ export function HomeScreen() {
         </Pressable>
       ) : null}
 
-      <PrimaryButtonRow
-        left={{
-          label: 'Add Expense',
-          icon: 'document-plus',
-          onPress: () => {
-            router.push('/add-expense');
-          },
-        }}
-        right={{
-          label: 'Create Group',
-          icon: 'users',
-          onPress: () => router.push('/create-group'),
-        }}
-      />
-
-      <View style={{ gap: layout.cardGap }}>
-        <SectionTitle title="Actions" />
-        <QuickActionsGrid actions={[...data.quickActions]} onAction={onQuickAction} />
-      </View>
-
-      <View style={{ gap: layout.cardGap }}>
-        <SectionTitle title="Personal Spending" />
-        {data.bookkeeping.length > 0 ? (
-          <SectionCard>
-            {data.bookkeeping.map((row, index) => (
-              <SectionRow
-                key={row.id}
-                categoryKey={row.categoryKey}
-                categoryName={row.categoryName}
-                label={row.label}
-                value={row.amount}
-                showDivider={index < data.bookkeeping.length - 1}
-                showChevron={false}
-              />
-            ))}
-          </SectionCard>
-        ) : (
-          <EmptyStateCard
-            title="No expenses yet"
-            message="Add your first expense to start tracking this month."
-            ctaLabel={primaryGroupId ? 'Add Expense' : 'Create Group'}
-            ctaIcon="document-plus"
-            onPress={() => {
-              router.push('/add-expense');
-            }}
+      {/* Home uses components/home/QuickActionsGrid.tsx (not QuickActionCard). */}
+      <View style={{ flexDirection: 'row', width: '100%' }}>
+        <View style={{ width: '50%', paddingRight: 6, minWidth: 0 }}>
+          <PrimaryButton
+            label="Add Expense"
+            icon="document-plus"
+            onPress={() => router.push('/add-expense')}
           />
-        )}
-      </View>
-
-      <View style={{ gap: layout.cardGap }}>
-        <SectionTitle title="Split Groups" actionLabel="View All" onAction={() => router.push('/(tabs)/groups')} />
-        {data.splitGroups.length > 0 ? (
-          <View style={{ flexDirection: 'row', gap: layout.cardGap }}>
-            {data.splitGroups.map((group) => (
-              <HomeSplitGroupCard
-                key={group.id}
-                name={group.name}
-                balance={group.balance}
-                positive={group.positive}
-                onPress={() => router.push(`/group/${group.id}`)}
-              />
-            ))}
-          </View>
-        ) : (
-          <EmptyStateCard
-            title="No split groups yet"
-            message="Create a group when you have shared expenses to track."
-            ctaLabel="Create Group"
-            ctaIcon="user-group"
+        </View>
+        <View style={{ width: '50%', paddingLeft: 6, minWidth: 0 }}>
+          <SecondaryButton
+            label="Create Group"
+            icon="users"
             onPress={() => router.push('/create-group')}
+            variant="filled"
           />
-        )}
+        </View>
+      </View>
+
+      <View>
+        <SectionTitle title="Actions" />
+        <View style={{ marginTop: layout.cardGap }}>
+          <QuickActionsGrid actions={[...data.quickActions]} onAction={onQuickAction} />
+        </View>
+      </View>
+
+      <View>
+        <SectionTitle title="Personal Spending" />
+        <View style={{ marginTop: layout.cardGap }}>
+          {data.bookkeeping.length > 0 ? (
+            <SectionCard>
+              {data.bookkeeping.map((row, index) => (
+                <SectionRow
+                  key={row.id}
+                  categoryKey={row.categoryKey}
+                  categoryName={row.categoryName}
+                  label={row.label}
+                  value={row.amount}
+                  showDivider={index < data.bookkeeping.length - 1}
+                  showChevron={false}
+                />
+              ))}
+            </SectionCard>
+          ) : (
+            <EmptyStateCard
+              title="No expenses yet"
+              message="Add your first expense to start tracking this month."
+              ctaLabel={primaryGroupId ? 'Add Expense' : 'Create Group'}
+              ctaIcon="document-plus"
+              onPress={() => {
+                router.push('/add-expense');
+              }}
+            />
+          )}
+        </View>
+      </View>
+
+      <View>
+        <SectionTitle title="Split Groups" actionLabel="View All" onAction={() => router.push('/(tabs)/groups')} />
+        <View style={{ marginTop: layout.cardGap }}>
+          {data.splitGroups.length > 0 ? (
+            <View style={{ flexDirection: 'row', width: '100%' }}>
+              {data.splitGroups.map((group, index) => (
+                <View
+                  key={group.id}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    marginRight: index < data.splitGroups.length - 1 ? layout.cardGap : 0,
+                  }}
+                >
+                  <HomeSplitGroupCard
+                    name={group.name}
+                    balance={group.balance}
+                    positive={group.positive}
+                    onPress={() => router.push(`/group/${group.id}`)}
+                  />
+                </View>
+              ))}
+            </View>
+          ) : (
+            <EmptyStateCard
+              title="No split groups yet"
+              message="Create a group when you have shared expenses to track."
+              ctaLabel="Create Group"
+              ctaIcon="user-group"
+              onPress={() => router.push('/create-group')}
+            />
+          )}
+        </View>
       </View>
     </ScreenLayout>
   );

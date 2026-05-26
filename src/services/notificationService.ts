@@ -5,7 +5,7 @@ import {
 } from '../lib/queryColumns';
 import { supabase } from '../lib/supabase';
 import type { Notification, NotificationData, NotificationType } from '../types/models';
-import { isJwtTimingError } from '../utils/authErrors';
+import { isRecoverableAuthSessionError } from '../utils/authErrors';
 import { isoNow } from '../utils/date';
 import {
   formatInvitationNotificationBody,
@@ -57,12 +57,12 @@ async function withAuthRetry<T>(
   try {
     return await operation();
   } catch (error) {
-    if (alreadyRetried || !isJwtTimingError(error)) {
+    if (alreadyRetried || !isRecoverableAuthSessionError(error)) {
       throw error;
     }
 
     logger.warn(`${operationName} failed due to JWT timing error`, {
-      reason: 'jwt_timing_error',
+      reason: 'recoverable_session_error',
       table: 'notifications',
     });
     logger.info(`${operationName} retry after refresh started`, { table: 'notifications' });
@@ -130,9 +130,9 @@ export async function getNotifications(): Promise<Notification[]> {
       return notifications;
     }, 'Fetch notifications');
   } catch (error) {
-    if (isJwtTimingError(error)) {
+    if (isRecoverableAuthSessionError(error)) {
       logger.warn('Fetch notifications failed due to JWT timing error', {
-        reason: 'jwt_timing_error',
+        reason: 'recoverable_session_error',
         table: 'notifications',
       });
     } else {
@@ -189,9 +189,9 @@ export async function getUnreadCount(): Promise<number> {
       return unreadCount;
     }, 'Fetch unread count');
   } catch (error) {
-    if (isJwtTimingError(error)) {
+    if (isRecoverableAuthSessionError(error)) {
       logger.warn('Fetch unread count failed due to JWT timing error', {
-        reason: 'jwt_timing_error',
+        reason: 'recoverable_session_error',
         table: 'notifications',
       });
     } else {

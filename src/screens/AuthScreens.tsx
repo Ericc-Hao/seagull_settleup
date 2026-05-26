@@ -1,16 +1,17 @@
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'react-native';
+import { Children, Fragment, isValidElement, useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Platform, Pressable, Text, TextInput, View } from 'react-native';
 
 import { PrimaryButton, AppLogo, ScreenLayout, SecondaryButton } from '../components';
 import { InvitationContextCard } from '../components/invitations/InvitationContextCard';
+import { ShadowSurface } from '../components/layout/ShadowSurface';
 import { useAuth } from '../context/AuthContext';
 import { useInvitationPreview } from '../hooks/useInvitationPreview';
 import { useInviteRouteParam } from '../hooks/useInviteRouteParam';
 import { setPendingInviteToken } from '../lib/pendingInviteToken';
-import { colors, layout, radii, shadows, spacing, typography } from '../theme';
+import { colors, layout, radii, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
 import { maskEmail, normalizeEmail } from '../utils/validation';
 import { safeBack } from '../utils/navigation';
@@ -21,35 +22,92 @@ function authRoute(path: '/login' | '/register', inviteToken?: string) {
   return inviteToken ? { pathname: path, params: { invite: inviteToken } } : path;
 }
 
+function flattenAuthChildren(children: ReactNode): ReactNode[] {
+  const items: ReactNode[] = [];
+
+  Children.forEach(children, (child) => {
+    if (child == null || child === false) {
+      return;
+    }
+
+    if (isValidElement(child) && child.type === Fragment) {
+      items.push(...flattenAuthChildren(child.props.children));
+      return;
+    }
+
+    items.push(child);
+  });
+
+  return items;
+}
+
+function AuthForm({ children }: { children: ReactNode }) {
+  const items = flattenAuthChildren(children);
+
+  return (
+    <View style={{ width: '100%', alignSelf: 'stretch' }}>
+      {items.map((child, index) => (
+        <View
+          key={index}
+          style={{
+            width: '100%',
+            alignSelf: 'stretch',
+            marginTop: index > 0 ? spacing.md : 0,
+          }}
+        >
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function AuthCard({
   title,
   subtitle,
   children,
+  scroll = true,
+  compact = false,
 }: {
   title: string;
   subtitle: string;
   children: ReactNode;
+  scroll?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <ScreenLayout scroll={false} contentStyle={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
-      <View style={{ alignItems: 'center', gap: spacing.md }}>
-        <AppLogo size={88} />
-        <View style={{ alignItems: 'center', gap: spacing.xs }}>
-          <Text style={[typography.largeTitle, { textAlign: 'center' }]}>{title}</Text>
-          <Text style={[typography.subtitle, { textAlign: 'center' }]}>{subtitle}</Text>
+    <ScreenLayout
+      scroll={scroll}
+      keyboardAvoiding
+      bottomTabPadding={false}
+      scrollBottomPadding={compact ? spacing['3xl'] + 48 : spacing['4xl'] + 48}
+      contentStyle={{
+        flexGrow: 1,
+        alignSelf: 'stretch',
+        ...(compact ? { justifyContent: 'center' } : {}),
+      }}
+    >
+      <View style={{ alignSelf: 'stretch', paddingTop: compact ? spacing.md : spacing.lg }}>
+        <View style={{ alignItems: 'center' }}>
+          <AppLogo size={72} />
+          <View style={{ marginTop: spacing.md, alignItems: 'center', maxWidth: 320 }}>
+            <Text style={[typography.largeTitle, { textAlign: 'center' }]}>{title}</Text>
+            <Text style={[typography.subtitle, { textAlign: 'center', marginTop: spacing.xs }]}>
+              {subtitle}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <View
-        style={{
-          backgroundColor: colors.white,
-          borderRadius: radii['2xl'],
-          padding: layout.cardPadding,
-          gap: spacing.md,
-          ...shadows.card,
-        }}
-      >
-        {children}
+        <View style={{ marginTop: spacing.xl }}>
+          <ShadowSurface
+            shadow="card"
+            borderRadius={radii['2xl']}
+            style={{ alignSelf: 'stretch' }}
+            innerStyle={{ padding: layout.cardPadding }}
+          >
+            <AuthForm>{children}</AuthForm>
+          </ShadowSurface>
+        </View>
       </View>
     </ScreenLayout>
   );
@@ -63,6 +121,7 @@ function AuthInput({
   autoCapitalize = 'none',
   disabled = false,
   helperText,
+  placeholder,
 }: {
   label: string;
   value: string;
@@ -71,20 +130,22 @@ function AuthInput({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   disabled?: boolean;
   helperText?: string;
+  placeholder?: string;
 }) {
   return (
     <View
       style={{
-        backgroundColor: disabled ? colors.borderSubtle : colors.background,
+        backgroundColor: disabled ? colors.borderSubtle : colors.white,
         borderRadius: radii.lg,
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
+        paddingVertical: spacing.sm + 4,
         borderWidth: 1,
         borderColor: colors.borderSubtle,
+        minHeight: 76,
         opacity: disabled ? 0.85 : 1,
       }}
     >
-      <Text style={[typography.label, { marginBottom: 4 }]}>{label}</Text>
+      <Text style={[typography.label, { marginBottom: 6 }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -93,10 +154,21 @@ function AuthInput({
         autoCorrect={false}
         editable={!disabled}
         selectTextOnFocus={!disabled}
-        style={[typography.body, { padding: 0, color: disabled ? colors.textSecondary : colors.textPrimary }]}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textTertiary}
+        style={[
+          typography.body,
+          {
+            padding: 0,
+            margin: 0,
+            minHeight: 24,
+            color: disabled ? colors.textSecondary : colors.textPrimary,
+            ...(Platform.OS === 'android' ? { textAlignVertical: 'center' as const } : {}),
+          },
+        ]}
       />
       {helperText ? (
-        <Text style={[typography.caption, { color: colors.textTertiary, marginTop: 4 }]}>{helperText}</Text>
+        <Text style={[typography.caption, { color: colors.textTertiary, marginTop: 6 }]}>{helperText}</Text>
       ) : null}
     </View>
   );
@@ -106,7 +178,11 @@ function ErrorText({ message }: { message?: string | null }) {
   if (!message) {
     return null;
   }
-  return <Text style={[typography.caption, { color: colors.danger }]}>{message}</Text>;
+  return (
+    <Text style={[typography.caption, { color: colors.danger, textAlign: 'center', lineHeight: 18 }]}>
+      {message}
+    </Text>
+  );
 }
 
 function NoticeText({ message, onDismiss }: { message: string; onDismiss: () => void }) {
@@ -117,10 +193,9 @@ function NoticeText({ message, onDismiss }: { message: string; onDismiss: () => 
         backgroundColor: colors.borderSubtle,
         borderRadius: radii.lg,
         padding: spacing.md,
-        gap: spacing.xs,
       }}
     >
-      <Text style={[typography.caption, { color: colors.textSecondary }]}>{message}</Text>
+      <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>{message}</Text>
     </Pressable>
   );
 }
@@ -153,14 +228,7 @@ function AvatarPicker({
   };
 
   return (
-    <Pressable
-      onPress={() => void pickAvatar()}
-      style={{
-        alignItems: 'center',
-        gap: spacing.sm,
-        paddingVertical: spacing.sm,
-      }}
-    >
+    <Pressable onPress={() => void pickAvatar()} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
       <View
         style={{
           width: 80,
@@ -175,14 +243,14 @@ function AvatarPicker({
         }}
       >
         {uri ? (
-          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} />
+          <Image source={{ uri }} style={{ width: 80, height: 80 }} />
         ) : (
           <Text style={[typography.amountSm, { color: colors.primary }]}>
             {(displayName.trim() || 'S').charAt(0).toUpperCase()}
           </Text>
         )}
       </View>
-      <Text style={[typography.caption, { fontWeight: '600', color: colors.primary }]}>
+      <Text style={[typography.caption, { fontWeight: '600', color: colors.primary, marginTop: spacing.sm }]}>
         {uri ? 'Change Avatar' : 'Add Avatar'}
       </Text>
     </Pressable>
@@ -192,7 +260,7 @@ function AvatarPicker({
 function AuthLink({ text, action, onPress }: { text: string; action: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={{ alignItems: 'center', paddingVertical: spacing.xs }}>
-      <Text style={typography.caption}>
+      <Text style={[typography.caption, { textAlign: 'center' }]}>
         {text} <Text style={{ color: colors.primary, fontWeight: '700' }}>{action}</Text>
       </Text>
     </Pressable>
@@ -202,9 +270,13 @@ function AuthLink({ text, action, onPress }: { text: string; action: string; onP
 export function AuthLoadingScreen() {
   return (
     <ScreenLayout scroll={false} contentStyle={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <AppLogo size={88} />
-      <ActivityIndicator color={colors.primary} />
-      <Text style={typography.caption}>Checking your session...</Text>
+      <AppLogo size={72} />
+      <View style={{ marginTop: spacing.md }}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+      <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textSecondary }]}>
+        Checking your session...
+      </Text>
     </ScreenLayout>
   );
 }
@@ -213,7 +285,7 @@ export function WelcomeScreen() {
   const { sessionNotice, clearSessionNotice } = useAuth();
 
   return (
-    <AuthCard title="Seagull Split" subtitle="Track spending. Split bills. Settle in CAD.">
+    <AuthCard title="Seagull Split" subtitle="Track spending. Split bills. Settle in CAD." compact>
       {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
       <PrimaryButton label="Create Account" onPress={() => router.push('/(auth)/register')} />
       <SecondaryButton label="Log In" variant="filled" onPress={() => router.push('/(auth)/login')} />
@@ -283,7 +355,7 @@ export function LoginScreen() {
   };
 
   return (
-    <AuthCard title="Welcome Back" subtitle="Log in to your Seagull Split account.">
+    <AuthCard title="Welcome Back" subtitle="Log in to your Seagull Split account." compact>
       <InvitationContextCard
         inviteToken={inviteToken}
         preview={preview}
@@ -296,9 +368,16 @@ export function LoginScreen() {
         value={email}
         onChangeText={setEmail}
         disabled={emailLocked}
+        placeholder="you@example.com"
         helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
       />
-      <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+      <AuthInput
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        placeholder="Enter your password"
+      />
       {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
       <ErrorText message={validation ?? error} />
       <PrimaryButton
@@ -357,6 +436,15 @@ export function RegisterScreen() {
 
   const showExistingAccountPrompt = Boolean(isPendingInvite && preview?.inviteeHasAccount);
 
+  useEffect(() => {
+    authUiLogger.info('Register auth render state', {
+      showExistingAccountPrompt,
+      loading,
+      previewLoading,
+      hasInviteToken: Boolean(inviteToken),
+    });
+  }, [showExistingAccountPrompt, loading, previewLoading, inviteToken]);
+
   const submit = async () => {
     clearError();
     const registrationEmail = emailLocked && preview?.invitedEmail ? preview.invitedEmail : email.trim();
@@ -395,7 +483,7 @@ export function RegisterScreen() {
   };
 
   return (
-    <AuthCard title="Create Account" subtitle="Start tracking and splitting in CAD.">
+    <AuthCard title="Create Account" subtitle="Start tracking and splitting in CAD." scroll>
       <InvitationContextCard
         inviteToken={inviteToken}
         preview={preview}
@@ -409,18 +497,14 @@ export function RegisterScreen() {
             backgroundColor: colors.background,
             borderRadius: radii.lg,
             padding: layout.cardPadding,
-            gap: spacing.sm,
             borderWidth: 1,
             borderColor: colors.borderSubtle,
           }}
         >
-          <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>
+          <Text style={[typography.bodyMedium, { color: colors.textPrimary, marginBottom: spacing.sm }]}>
             An account already exists for this email. Please log in to accept the invitation.
           </Text>
-          <PrimaryButton
-            label="Log In"
-            onPress={() => router.push(authRoute('/login', inviteToken))}
-          />
+          <PrimaryButton label="Log In" onPress={() => router.push(authRoute('/login', inviteToken))} />
         </View>
       ) : (
         <>
@@ -431,9 +515,10 @@ export function RegisterScreen() {
             value={email}
             onChangeText={setEmail}
             disabled={emailLocked}
+            placeholder="you@example.com"
             helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
           />
-          <AuthInput label="Phone (optional)" value={phone} onChangeText={setPhone} />
+          <AuthInput label="Phone (optional)" value={phone} onChangeText={setPhone} placeholder="Optional" />
           <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
           <AuthInput
             label="Confirm Password"
@@ -460,7 +545,7 @@ export function RegisterScreen() {
 
 export function ForgotPasswordScreen() {
   return (
-    <AuthCard title="Reset Password" subtitle="Password reset will be added soon.">
+    <AuthCard title="Reset Password" subtitle="Password reset will be added soon." compact>
       <SecondaryButton label="Back to Log In" variant="filled" onPress={() => safeBack('/(auth)/login')} />
     </AuthCard>
   );

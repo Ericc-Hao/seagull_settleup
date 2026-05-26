@@ -9,6 +9,7 @@ import type { GroupType } from '../types/models';
 import { formatDateForSupabase, isEndDateValid, parseSupabaseDate } from '../utils/date';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import { invalidateAfterCreateGroup } from '../utils/mutationInvalidation';
 import {
   hasDuplicateEmail,
   isValidEmail,
@@ -19,7 +20,7 @@ import {
 const logger = createLogger('useCreateGroup');
 
 export function useCreateGroup() {
-  const { refresh } = useAppData();
+  const { invalidate, refreshNotifications } = useAppData();
   const today = formatDateForSupabase(new Date());
 
   const [name, setName] = useState('');
@@ -118,7 +119,8 @@ export function useCreateGroup() {
         endDate: endDate || null,
         invitedEmails,
       });
-      await refresh();
+      invalidateAfterCreateGroup(invalidate);
+      void refreshNotifications();
       logger.info('Create group submit succeeded', { groupId: result.group.id });
       return result;
     } catch (error) {
@@ -129,7 +131,7 @@ export function useCreateGroup() {
     } finally {
       setSubmitting(false);
     }
-  }, [endDate, groupType, invitedEmails, name, refresh, startDate, submitting, validateDates]);
+  }, [endDate, groupType, invitedEmails, invalidate, name, refreshNotifications, startDate, submitting, validateDates]);
 
   const handleStartDateChange = useCallback(
     (value: string) => {

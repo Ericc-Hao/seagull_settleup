@@ -1,5 +1,4 @@
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { router } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
 import {
@@ -14,29 +13,23 @@ import {
   SectionTitle,
   SummaryOverviewCard,
 } from '../components';
+import { useAppData } from '../context/AppDataContext';
 import { useHomeData } from '../hooks/useHomeData';
 import { useNotifications } from '../context/NotificationsContext';
 import { getPrimaryGroupIdForUser } from '../services/groupService';
-import {
-  formatInvitationMessage,
-  syncPendingInvitationsForCurrentUser,
-} from '../services/invitationService';
-import type { PendingInvitationView } from '../types/views';
+import { formatInvitationMessage } from '../services/invitationService';
 import { colors, layout, typography } from '../theme';
+import { useStaleFocusRefresh } from '../hooks/useStaleFocusRefresh';
 
 export function HomeScreen() {
   const data = useHomeData();
+  const { pendingInvitations } = useAppData();
   const { unreadCount } = useNotifications();
-  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitationView[]>([]);
   const primaryGroupId = getPrimaryGroupIdForUser();
 
-  useFocusEffect(
-    useCallback(() => {
-      void syncPendingInvitationsForCurrentUser()
-        .then(setPendingInvitations)
-        .catch(() => setPendingInvitations([]));
-    }, []),
-  );
+  useStaleFocusRefresh({
+    types: ['home', 'invitations', 'notifications'],
+  });
 
   const onQuickAction = (id: string) => {
     if (id === 'create') router.push('/create-group');

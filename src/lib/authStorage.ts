@@ -34,3 +34,38 @@ function isWebRuntime(): boolean {
 }
 
 export const authStorage: AuthStorage = isWebRuntime() ? createWebStorage() : AsyncStorage;
+
+function isSupabaseAuthStorageKey(key: string): boolean {
+  return key.startsWith('sb-') || key.includes('supabase.auth.token');
+}
+
+export async function clearSupabaseAuthStorage(): Promise<void> {
+  if (isWebRuntime()) {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (key && isSupabaseAuthStorageKey(key)) {
+        keysToRemove.push(key);
+      }
+    }
+
+    for (const key of keysToRemove) {
+      window.localStorage.removeItem(key);
+    }
+    return;
+  }
+
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const authKeys = keys.filter(isSupabaseAuthStorageKey);
+    if (authKeys.length > 0) {
+      await AsyncStorage.multiRemove(authKeys);
+    }
+  } catch {
+    // Best-effort cleanup only.
+  }
+}

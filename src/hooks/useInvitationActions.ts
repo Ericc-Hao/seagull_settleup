@@ -9,7 +9,19 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('useInvitationActions');
 
-export function useInvitationActions(onComplete?: () => void | Promise<void>) {
+export interface InvitationActionCallbacks {
+  onAcceptComplete?: () => void | Promise<void>;
+  onDeclineComplete?: () => void | Promise<void>;
+}
+
+export function useInvitationActions(
+  callbacks?: InvitationActionCallbacks | (() => void | Promise<void>),
+) {
+  const onAcceptComplete =
+    typeof callbacks === 'function' ? callbacks : callbacks?.onAcceptComplete;
+  const onDeclineComplete =
+    typeof callbacks === 'function' ? callbacks : callbacks?.onDeclineComplete;
+
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +33,7 @@ export function useInvitationActions(onComplete?: () => void | Promise<void>) {
       try {
         const result = await acceptInvitation(invitationId);
         logger.info('Accept invitation succeeded', { invitationId, groupId: result.groupId });
-        await onComplete?.();
+        await onAcceptComplete?.();
         return result;
       } catch (err) {
         logger.error('Accept invitation failed', err, { invitationId });
@@ -31,7 +43,7 @@ export function useInvitationActions(onComplete?: () => void | Promise<void>) {
         setProcessingId(null);
       }
     },
-    [onComplete],
+    [onAcceptComplete],
   );
 
   const decline = useCallback(
@@ -42,7 +54,7 @@ export function useInvitationActions(onComplete?: () => void | Promise<void>) {
       try {
         await declineInvitation(invitationId);
         logger.info('Decline invitation succeeded', { invitationId });
-        await onComplete?.();
+        await onDeclineComplete?.();
         return true;
       } catch (err) {
         logger.error('Decline invitation failed', err, { invitationId });
@@ -52,7 +64,7 @@ export function useInvitationActions(onComplete?: () => void | Promise<void>) {
         setProcessingId(null);
       }
     },
-    [onComplete],
+    [onDeclineComplete],
   );
 
   return {

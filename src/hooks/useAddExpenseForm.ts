@@ -15,6 +15,10 @@ import { getCategoryPickerOptions, resolveCategoryForSave } from '../utils/categ
 import { isoNow } from '../utils/date';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import {
+  invalidateAfterCreatePersonalExpense,
+  invalidateAfterCreateSplitExpense,
+} from '../utils/mutationInvalidation';
 import { addCents, dollarsToCents, formatAmountInputValue, splitAmountEvenly } from '../utils/money';
 
 const logger = createLogger('useAddExpenseForm');
@@ -43,7 +47,7 @@ export interface UseGroupsResult {
 }
 
 export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuery: UseGroupsResult) {
-  const { version, refresh } = useAppData();
+  const { versions, invalidate } = useAppData();
   const userId = getCurrentUserId();
 
   const [kind, setKind] = useState<ExpenseType>('split');
@@ -68,7 +72,7 @@ export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuer
   const [saving, setSaving] = useState(false);
 
   const amountCents = dollarsToCents(amountText);
-  const categories = useMemo(() => getCachedCategories(), [version]);
+  const categories = useMemo(() => getCachedCategories(), [versions.expenses]);
 
   const categoryOptions: CategoryOption[] = useMemo(
     () =>
@@ -315,7 +319,11 @@ export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuer
         logger.info('Create split expense succeeded', { groupId: selectedGroupId });
       }
 
-      await refresh();
+      if (kind === 'personal') {
+        invalidateAfterCreatePersonalExpense(invalidate);
+      } else {
+        invalidateAfterCreateSplitExpense(invalidate, selectedGroupId!);
+      }
       return true;
     } catch (error) {
       logger.error('Add expense save failed', error, { kind, groupId: selectedGroupId });
@@ -335,7 +343,7 @@ export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuer
     note,
     payerMemberId,
     receiptUri,
-    refresh,
+    invalidate,
     selectedGroupId,
     splitMemberIds,
     splitMethod,

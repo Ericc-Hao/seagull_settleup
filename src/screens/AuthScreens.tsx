@@ -109,6 +109,22 @@ function ErrorText({ message }: { message?: string | null }) {
   return <Text style={[typography.caption, { color: colors.danger }]}>{message}</Text>;
 }
 
+function NoticeText({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <Pressable
+      onPress={onDismiss}
+      style={{
+        backgroundColor: colors.borderSubtle,
+        borderRadius: radii.lg,
+        padding: spacing.md,
+        gap: spacing.xs,
+      }}
+    >
+      <Text style={[typography.caption, { color: colors.textSecondary }]}>{message}</Text>
+    </Pressable>
+  );
+}
+
 function AvatarPicker({
   uri,
   displayName,
@@ -194,8 +210,11 @@ export function AuthLoadingScreen() {
 }
 
 export function WelcomeScreen() {
+  const { sessionNotice, clearSessionNotice } = useAuth();
+
   return (
     <AuthCard title="Seagull Split" subtitle="Track spending. Split bills. Settle in CAD.">
+      {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
       <PrimaryButton label="Create Account" onPress={() => router.push('/(auth)/register')} />
       <SecondaryButton label="Log In" variant="filled" onPress={() => router.push('/(auth)/login')} />
     </AuthCard>
@@ -203,7 +222,7 @@ export function WelcomeScreen() {
 }
 
 export function LoginScreen() {
-  const { signIn, error, clearError, loading } = useAuth();
+  const { signIn, error, clearError, loading, sessionNotice, clearSessionNotice } = useAuth();
   const inviteToken = useInviteRouteParam();
   const { preview, loading: previewLoading, fetchFailed, isPendingInvite } = useInvitationPreview(inviteToken);
   const [email, setEmail] = useState('');
@@ -280,6 +299,7 @@ export function LoginScreen() {
         helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
       />
       <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+      {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
       <ErrorText message={validation ?? error} />
       <PrimaryButton
         label={loading ? 'Logging In...' : 'Log In'}

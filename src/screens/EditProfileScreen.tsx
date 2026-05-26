@@ -13,6 +13,7 @@ import {
   UserAvatar,
 } from '../components';
 import { useAppData } from '../context/AppDataContext';
+import { invalidateAfterUpdateProfile } from '../utils/mutationInvalidation';
 import { EMT_METHOD_OPTIONS } from '../data/constants';
 import { getProfile, updateAvatar, updateProfile } from '../services/profileService';
 import { colors, layout, radii, spacing, typography } from '../theme';
@@ -65,7 +66,7 @@ function ProfileTextInput({
 }
 
 export function EditProfileScreen() {
-  const { refresh } = useAppData();
+  const { invalidate } = useAppData();
   const profile = getProfile();
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
@@ -147,7 +148,7 @@ export function EditProfileScreen() {
         emtPhone: emtPhone.trim() || undefined,
         preferredEmtMethod,
       });
-      await refresh();
+      invalidateAfterUpdateProfile(invalidate);
 
       if (avatarWarning) {
         setError(`Profile saved, but avatar upload failed: ${avatarWarning}`);

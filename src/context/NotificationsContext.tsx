@@ -9,7 +9,8 @@ import {
   useState,
 } from 'react';
 
-import { useAppData } from './AppDataContext';
+import { registerNotificationsRefresher } from './appDataBridge';
+import { useAuth } from './AuthContext';
 import {
   clearAllNotifications,
   clearNotification,
@@ -19,6 +20,7 @@ import {
   markNotificationAsRead,
 } from '../services/notificationService';
 import type { Notification } from '../types/models';
+import { isJwtTimingError } from '../utils/authErrors';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
 
@@ -41,8 +43,19 @@ interface NotificationsContextValue {
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
+function clearNotificationState(
+  setNotifications: (value: Notification[]) => void,
+  setUnreadCount: (value: number) => void,
+  setInitialLoading: (value: boolean) => void,
+): void {
+  setNotifications([]);
+  setUnreadCount(0);
+  setInitialLoading(false);
+}
+
 export function NotificationsProvider({ children }: { children: ReactNode }) {
-  const { version } = useAppData();
+  const { authInitialized, session, signOut } = useAuth();
+  const userId = session?.user?.id;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -53,6 +66,17 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const hasLoadedOnceRef = useRef(false);
 
   const refreshNotifications = useCallback(async (options?: { background?: boolean }) => {
+    if (!authInitialized) {
+      logger.info('Notifications fetch skipped because auth not initialized');
+      return;
+    }
+
+    if (!userId) {
+      logger.info('Notifications fetch skipped because no session');
+      clearNotificationState(setNotifications, setUnreadCount, setInitialLoading);
+      return;
+    }
+
     const generation = ++fetchGeneration.current;
     const background = options?.background ?? hasLoadedOnceRef.current;
 
@@ -84,6 +108,16 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       if (generation !== fetchGeneration.current) {
         return;
       }
+
+      if (isJwtTimingError(err)) {
+        logger.warn('Notifications fetch failed due to JWT timing error', {
+          reason: 'jwt_timing_error',
+        });
+        await signOut({ local: true, reason: 'jwt_timing_error' });
+        clearNotificationState(setNotifications, setUnreadCount, setInitialLoading);
+        return;
+      }
+
       logger.error('Notifications fetch failed', err);
       setError(toUserFriendlyError(err, 'Unable to load notifications.'));
     } finally {
@@ -92,11 +126,27 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         setRefreshing(false);
       }
     }
-  }, []);
+  }, [authInitialized, signOut, userId]);
 
   useEffect(() => {
+    registerNotificationsRefresher(refreshNotifications);
+    return () => registerNotificationsRefresher(null);
+  }, [refreshNotifications]);
+
+  useEffect(() => {
+    if (!authInitialized) {
+      logger.debug('Notifications fetch skipped because auth not initialized');
+      return;
+    }
+
+    if (!userId) {
+      logger.info('Notifications fetch skipped because no session');
+      clearNotificationState(setNotifications, setUnreadCount, setInitialLoading);
+      return;
+    }
+
     void refreshNotifications({ background: hasLoadedOnceRef.current });
-  }, [version, refreshNotifications]);
+  }, [authInitialized, refreshNotifications, userId]);
 
   const markAsRead = useCallback(async (notificationId: string) => {
     logger.info('Mark as read started', { notificationId });
@@ -198,8 +248,14 @@ export function useNotifications(): NotificationsContextValue & { refetch: () =>
   if (!context) {
     throw new Error('useNotifications must be used within NotificationsProvider');
   }
+
+  const refetch = useCallback(
+    () => context.refreshNotifications({ background: context.hasLoadedOnce }),
+    [context],
+  );
+
   return {
     ...context,
-    refetch: () => context.refreshNotifications({ background: context.hasLoadedOnce }),
+    refetch,
   };
 }

@@ -13,6 +13,7 @@ import {
 import { SplitExpenseCard } from '../../src/components/expenses/SplitExpenseCard';
 import { EXPENSE_FILTER_OPTIONS } from '../../src/data/constants';
 import { useExpensesData } from '../../src/hooks/useExpensesData';
+import { useStaleFocusRefresh } from '../../src/hooks/useStaleFocusRefresh';
 import { useNotifications } from '../../src/context/NotificationsContext';
 import { colors, layout, typography } from '../../src/theme';
 
@@ -23,6 +24,8 @@ export default function ExpensesTabScreen() {
   const showSplit = filter === 'all' || filter === 'split';
   const personalItems = data.personal;
   const splitItems = data.split;
+
+  useStaleFocusRefresh({ types: ['expenses', 'groups', 'settlements'] });
 
   return (
     <ScreenLayout

@@ -1,8 +1,8 @@
 import { mapReceipt } from '../lib/mappers';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import type { Receipt } from '../types/models';
 import type { ExpenseReceiptView } from '../types/views';
+import { RECEIPT_COLUMNS, RECEIPT_LIST_LIMIT } from '../lib/queryColumns';
 import { createLogger } from '../utils/logger';
 import { readDb } from './dbHelpers';
 import { getCurrentUserId } from './groupService';
@@ -60,7 +60,11 @@ export function getCachedReceipts(): Receipt[] {
 export async function getReceipts(): Promise<Receipt[]> {
   logger.info('Fetch receipts started', { table: 'receipts' });
   try {
-    const { data, error } = await supabase.from('receipts').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('receipts')
+      .select(RECEIPT_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(RECEIPT_LIST_LIMIT);
     if (error) {
       throw error;
     }
@@ -210,7 +214,6 @@ export async function createReceipt(input: {
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Create receipt succeeded', { table: 'receipts', receiptId: data.id });
     return mapReceipt(data);
   } catch (error) {
@@ -226,7 +229,6 @@ export async function deleteReceipt(receiptId: string): Promise<void> {
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Delete receipt succeeded', { table: 'receipts', receiptId });
   } catch (error) {
     logger.error('Delete receipt failed', error, { table: 'receipts', receiptId });

@@ -11,11 +11,12 @@ import { deactivateGroupMember } from '../services/memberService';
 import type { GroupMemberWithProfile } from '../types/views';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import { invalidateAfterGroupMemberChange } from '../utils/mutationInvalidation';
 
 const logger = createLogger('useGroupMemberActions');
 
 export function useGroupMemberActions(groupId: string, refreshMembers: () => Promise<void>) {
-  const { refresh } = useAppData();
+  const { invalidate } = useAppData();
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
 
@@ -26,7 +27,7 @@ export function useGroupMemberActions(groupId: string, refreshMembers: () => Pro
       setActionError(undefined);
       try {
         await deactivateGroupMember(memberId, groupId);
-        await refresh();
+        invalidateAfterGroupMemberChange(invalidate, groupId);
         await refreshMembers();
         logger.info('Remove member succeeded', { groupId, memberId });
       } catch (error) {
@@ -37,7 +38,7 @@ export function useGroupMemberActions(groupId: string, refreshMembers: () => Pro
         setActionLoading(false);
       }
     },
-    [groupId, refresh, refreshMembers],
+    [groupId, invalidate, refreshMembers],
   );
 
   const cancelMemberInvitation = useCallback(
@@ -52,7 +53,7 @@ export function useGroupMemberActions(groupId: string, refreshMembers: () => Pro
           throw new Error('No pending invitation found for this member.');
         }
         await cancelInvitation(invitationId);
-        await refresh();
+        invalidateAfterGroupMemberChange(invalidate, groupId);
         await refreshMembers();
         logger.info('Cancel invitation succeeded', { groupId, memberId: member.id, invitationId });
       } catch (error) {
@@ -63,7 +64,7 @@ export function useGroupMemberActions(groupId: string, refreshMembers: () => Pro
         setActionLoading(false);
       }
     },
-    [groupId, refresh, refreshMembers],
+    [groupId, invalidate, refreshMembers],
   );
 
   const resendMemberInvitation = useCallback(
@@ -73,7 +74,7 @@ export function useGroupMemberActions(groupId: string, refreshMembers: () => Pro
       setActionError(undefined);
       try {
         const result = await resendInvitation(invitationId);
-        await refresh();
+        invalidateAfterGroupMemberChange(invalidate, groupId);
         await refreshMembers();
 
         if (!result.sent) {
@@ -96,7 +97,7 @@ export function useGroupMemberActions(groupId: string, refreshMembers: () => Pro
         setActionLoading(false);
       }
     },
-    [groupId, refresh, refreshMembers],
+    [groupId, invalidate, refreshMembers],
   );
 
   return {

@@ -1,7 +1,9 @@
 import type { Session, User } from '@supabase/supabase-js';
 
 import { clearCachedUserId, setCachedUserId } from '../lib/auth';
+import { clearSupabaseAuthStorage } from '../lib/authStorage';
 import { supabase } from '../lib/supabase';
+import { isJwtTimingError } from '../utils/authErrors';
 import { createLogger } from '../utils/logger';
 import { maskEmail } from '../utils/validation';
 import { updateAvatar } from './profileService';
@@ -108,7 +110,12 @@ export async function signInWithEmail(
   }
 }
 
-export async function signOut(): Promise<void> {
+export async function signOut(options?: { local?: boolean }): Promise<void> {
+  if (options?.local) {
+    await signOutLocal();
+    return;
+  }
+
   logger.info('Sign out started', { table: 'auth.users' });
   try {
     const { error } = await supabase.auth.signOut();
@@ -119,6 +126,97 @@ export async function signOut(): Promise<void> {
     logger.info('Sign out succeeded', { table: 'auth.users' });
   } catch (error) {
     logger.error('Sign out failed', error, { table: 'auth.users' });
+    throw error;
+  }
+}
+
+export async function signOutLocal(): Promise<void> {
+  logger.info('Local sign out started', { table: 'auth.users' });
+  try {
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    logger.warn('Local sign out via Supabase failed, clearing auth storage fallback', {
+      reason: isJwtTimingError(error) ? 'jwt_timing_error' : 'sign_out_failed',
+    });
+    await clearSupabaseAuthStorage();
+  }
+
+  clearCachedUserId();
+  logger.info('Local sign out succeeded', { table: 'auth.users' });
+}
+
+export async function refreshAuthSession(): Promise<Session | null> {
+  logger.info('Auth session refresh started', { table: 'auth.users' });
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) {
+      if (isJwtTimingError(error)) {
+        logger.warn('Auth session refresh failed due to JWT timing error', {
+          reason: 'jwt_timing_error',
+          table: 'auth.users',
+        });
+      } else {
+        logger.error('Auth session refresh failed', error, { table: 'auth.users' });
+      }
+      throw error;
+    }
+
+    if (data.session?.user?.id) {
+      setCachedUserId(data.session.user.id);
+    }
+
+    logger.info('Auth session refresh succeeded', {
+      hasSession: Boolean(data.session),
+      table: 'auth.users',
+    });
+    return data.session;
+  } catch (error) {
+    if (!isJwtTimingError(error)) {
+      logger.error('Auth session refresh failed', error, { table: 'auth.users' });
+    }
+    throw error;
+  }
+}
+
+export async function restoreAuthSession(): Promise<{
+  session: Session | null;
+  invalidatedDueToJwt: boolean;
+}> {
+  logger.info('Auth session restore started', { table: 'auth.users' });
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      throw error;
+    }
+
+    if (!data.session) {
+      logger.info('Auth session restore succeeded', { hasSession: false, table: 'auth.users' });
+      return { session: null, invalidatedDueToJwt: false };
+    }
+
+    try {
+      const refreshedSession = await refreshAuthSession();
+      logger.info('Auth session restore succeeded', {
+        hasSession: Boolean(refreshedSession),
+        table: 'auth.users',
+      });
+      return { session: refreshedSession, invalidatedDueToJwt: false };
+    } catch (refreshError) {
+      if (isJwtTimingError(refreshError)) {
+        logger.warn('Local sign out due to invalid session during restore', {
+          reason: 'jwt_timing_error',
+          table: 'auth.users',
+        });
+        await signOutLocal();
+        return { session: null, invalidatedDueToJwt: true };
+      }
+      throw refreshError;
+    }
+  } catch (error) {
+    logger.error('Auth session restore failed', error, { table: 'auth.users' });
     throw error;
   }
 }

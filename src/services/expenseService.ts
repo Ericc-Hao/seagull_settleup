@@ -1,6 +1,5 @@
 import { buildEqualSplits } from '../core/settlement';
 import { mapExpense } from '../lib/mappers';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import type {
   CreateExpenseInput,
@@ -581,7 +580,6 @@ export async function createPersonalExpense(input: CreatePersonalExpenseInput): 
       await attachReceiptToExpense(expense.id, userId, null, input.receiptLocalUri);
     }
 
-    await refreshCache();
     logger.info('Create personal expense succeeded', { table: 'expenses', expenseId: expense.id });
     return getExpenseById(expense.id) ?? expense;
   } catch (error) {
@@ -634,7 +632,6 @@ export async function createSplitExpense(input: CreateSplitExpenseInput): Promis
       await attachReceiptToExpense(expense.id, userId, input.groupId, input.receiptLocalUri);
     }
 
-    await refreshCache();
     logger.info('Create split expense succeeded', { table: 'expenses', expenseId: expense.id, groupId: input.groupId });
     return getExpenseById(expense.id) ?? expense;
   } catch (error) {
@@ -727,7 +724,6 @@ export async function updateExpense(expenseId: string, input: UpdateExpenseInput
     );
   }
 
-  await refreshCache();
   const updated = getExpenseById(expenseId);
   if (!updated) {
     throw new Error(`Expense not found: ${expenseId}`);
@@ -742,7 +738,6 @@ export async function deleteExpense(expenseId: string): Promise<void> {
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Delete expense succeeded', { table: 'expenses', expenseId });
   } catch (error) {
     logger.error('Delete expense failed', error, { table: 'expenses', expenseId });

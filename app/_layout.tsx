@@ -66,9 +66,9 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { loading } = useAuth();
+  const { loading, authInitialized } = useAuth();
 
-  if (loading) {
+  if (loading || !authInitialized) {
     return <AuthLoadingScreen />;
   }
 

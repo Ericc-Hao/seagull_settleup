@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 
 import { useAppData } from '../context/AppDataContext';
+import { invalidateAfterMarkTransferPaid } from '../utils/mutationInvalidation';
 import {
   FormSection,
   ScreenLayout,
@@ -41,7 +42,7 @@ interface SettleUpScreenProps {
 
 export function SettleUpScreen({ mode, groupId }: SettleUpScreenProps) {
   const isGlobal = mode === 'global';
-  const { refresh } = useAppData();
+  const { invalidate, refreshNotifications } = useAppData();
   const groupData = useSettleUpData(groupId ?? '', { enabled: !isGlobal });
   const globalData = useGlobalSettleUpData();
   const data = isGlobal ? globalData : groupData;
@@ -114,7 +115,8 @@ export function SettleUpScreen({ mode, groupId }: SettleUpScreenProps) {
       });
       setConfirmTransfer(null);
       setDetailTransfer(null);
-      await refresh();
+      invalidateAfterMarkTransferPaid(invalidate, transferGroupId);
+      void refreshNotifications();
     } catch (error) {
       logger.error('Mark as paid failed', error, {
         groupId: transferGroupId,
@@ -129,7 +131,17 @@ export function SettleUpScreen({ mode, groupId }: SettleUpScreenProps) {
 
   const handleConfirmTeamSettlement = async () => {
     try {
-      await team.confirmTeamSettlement(refresh);
+      await team.confirmTeamSettlement(async () => {
+        if (groupId) {
+          invalidateAfterMarkTransferPaid(invalidate, groupId);
+        } else {
+          invalidate('settlements');
+          invalidate('home');
+          invalidate('expenses');
+          invalidate('groups');
+        }
+        void refreshNotifications();
+      });
     } catch (error) {
       Alert.alert('Unable to save team settlement', toUserFriendlyError(error, 'Please try again.'));
     }

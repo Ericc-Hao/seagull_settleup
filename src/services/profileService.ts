@@ -1,6 +1,5 @@
 import { getCachedUserId } from '../lib/auth';
 import { mapProfile } from '../lib/mappers';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import type { UpdateProfileInput } from '../types/inputs';
 import type { Profile } from '../types/models';
@@ -126,7 +125,6 @@ export async function ensureProfileExists(): Promise<Profile | null> {
       throw error;
     }
 
-    await refreshCache();
     logger.info('Ensure profile exists succeeded', { userId: user.id, created: true, table: 'profiles' });
     return mapProfile(data);
   } catch (error) {
@@ -194,7 +192,6 @@ export async function updateProfile(
       throw error;
     }
 
-    await refreshCache();
     logger.info('Update profile succeeded', { userId: authUserId, table: 'profiles' });
     return mapProfile(data);
   } catch (error) {

@@ -1,17 +1,20 @@
 import type { Session, User } from '@supabase/supabase-js';
-import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { clearCachedUserId, setCachedUserId } from '../lib/auth';
-import { createEmptySnapshot, setCache } from '../lib/dataCache';
+import { resetAppDataCache } from './appDataBridge';
 import {
-  getCurrentSession,
   listenToAuthChanges,
+  refreshAuthSession,
+  restoreAuthSession,
   signInWithEmail,
   signOut as signOutService,
+  signOutLocal,
   signUpWithEmail,
 } from '../services/authService';
 import { ensureProfileExists } from '../services/profileService';
 import { syncPendingInvitationsForCurrentUser } from '../services/invitationService';
+import { CLOCK_SYNC_NOTICE, isJwtTimingError } from '../utils/authErrors';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
 
@@ -21,7 +24,9 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  authInitialized: boolean;
   isAuthenticated: boolean;
+  sessionNotice: string | null;
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (input: {
@@ -31,8 +36,10 @@ interface AuthContextValue {
     phone?: string;
     avatarUri?: string;
   }) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (options?: { local?: boolean; reason?: 'jwt_timing_error' }) => Promise<void>;
+  refreshSession: () => Promise<Session | null>;
   clearError: () => void;
+  clearSessionNotice: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -50,7 +57,10 @@ function authMessage(err: unknown, fallback: string): string {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authInitialized, setAuthInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+  const jwtTimingFailureCount = useRef(0);
 
   const applySession = useCallback((nextSession: Session | null) => {
     setSession(nextSession);
@@ -58,44 +68,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCachedUserId(nextSession.user.id);
     } else {
       clearCachedUserId();
-      setCache(createEmptySnapshot());
+      resetAppDataCache();
     }
   }, []);
 
+  const markJwtTimingFailure = useCallback(() => {
+    jwtTimingFailureCount.current += 1;
+    if (jwtTimingFailureCount.current >= 2) {
+      setSessionNotice(CLOCK_SYNC_NOTICE);
+    }
+  }, []);
+
+  const handleInvalidSession = useCallback(async () => {
+    logger.warn('Local sign out due to invalid session', { reason: 'jwt_timing_error' });
+    markJwtTimingFailure();
+    await signOutLocal();
+    applySession(null);
+  }, [applySession, markJwtTimingFailure]);
+
   useEffect(() => {
     let mounted = true;
-    getCurrentSession()
-      .then((currentSession) => {
-        if (mounted) {
-          applySession(currentSession);
+    let unsubscribe: (() => void) | null = null;
+
+    const initializeAuth = async () => {
+      try {
+        const { session: restoredSession, invalidatedDueToJwt } = await restoreAuthSession();
+        if (!mounted) {
+          return;
         }
-      })
-      .catch((err: unknown) => {
-        if (mounted) {
+        applySession(restoredSession);
+        if (invalidatedDueToJwt) {
+          markJwtTimingFailure();
+        }
+      } catch (err: unknown) {
+        if (!mounted) {
+          return;
+        }
+        if (isJwtTimingError(err)) {
+          await handleInvalidSession();
+        } else {
           logger.error('Restore session failed', err);
           setError(toUserFriendlyError(err, 'Unable to restore session.'));
         }
-      })
-      .finally(() => {
+      } finally {
         if (mounted) {
+          setAuthInitialized(true);
           setLoading(false);
+          const subscription = listenToAuthChanges((nextSession) => {
+            applySession(nextSession);
+          });
+          unsubscribe = () => subscription.unsubscribe();
         }
-      });
+      }
+    };
 
-    const subscription = listenToAuthChanges((nextSession) => {
-      applySession(nextSession);
-      setLoading(false);
-    });
+    void initializeAuth();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      unsubscribe?.();
     };
-  }, [applySession]);
+  }, [applySession, handleInvalidSession, markJwtTimingFailure]);
+
+  const refreshSession = useCallback(async () => {
+    try {
+      const refreshedSession = await refreshAuthSession();
+      applySession(refreshedSession);
+      return refreshedSession;
+    } catch (err) {
+      if (isJwtTimingError(err)) {
+        await handleInvalidSession();
+      }
+      throw err;
+    }
+  }, [applySession, handleInvalidSession]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);
+    setSessionNotice(null);
+    jwtTimingFailureCount.current = 0;
     try {
       const result = await signInWithEmail(email, password);
       applySession(result.session);
@@ -121,6 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }) => {
     setLoading(true);
     setError(null);
+    setSessionNotice(null);
+    jwtTimingFailureCount.current = 0;
     try {
       const result = await signUpWithEmail(input);
       applySession(result.session);
@@ -137,14 +191,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [applySession]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (options?: { local?: boolean; reason?: 'jwt_timing_error' }) => {
     setLoading(true);
     setError(null);
-    logger.info('Logout started');
+    if (options?.reason === 'jwt_timing_error') {
+      markJwtTimingFailure();
+    }
+    logger.info('Logout started', { local: Boolean(options?.local) });
     try {
-      await signOutService();
+      if (options?.local) {
+        await signOutLocal();
+      } else {
+        await signOutService();
+      }
       applySession(null);
-      logger.info('Logout succeeded');
+      logger.info('Logout succeeded', { local: Boolean(options?.local) });
     } catch (err) {
       logger.error('Logout failed', err);
       setError(toUserFriendlyError(err, 'Unable to log out.'));
@@ -152,21 +213,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [applySession]);
+  }, [applySession, markJwtTimingFailure]);
 
   const value = useMemo(
     () => ({
       session,
       user: session?.user ?? null,
       loading,
+      authInitialized,
       isAuthenticated: Boolean(session),
+      sessionNotice,
       error,
       signIn,
       signUp,
       signOut,
+      refreshSession,
       clearError: () => setError(null),
+      clearSessionNotice: () => setSessionNotice(null),
     }),
-    [error, loading, session, signIn, signOut, signUp],
+    [authInitialized, error, loading, refreshSession, session, sessionNotice, signIn, signOut, signUp],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

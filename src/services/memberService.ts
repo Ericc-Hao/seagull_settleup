@@ -1,5 +1,4 @@
 import { mapGroupMember } from '../lib/mappers';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import type { AddGroupMemberInput, UpdateGroupMemberInput } from '../types/inputs';
 import type { GroupMember } from '../types/models';
@@ -192,7 +191,6 @@ export async function addGroupMember(input: AddGroupMemberInput): Promise<GroupM
       });
     }
 
-    await refreshCache();
     logger.info('Add group member succeeded', { table: 'group_members', memberId: member.id, groupId: input.groupId });
     return readDb().groupMembers.find((entry) => entry.id === member.id) ?? member;
   } catch (error) {
@@ -224,7 +222,6 @@ export async function updateGroupMember(
     if (error) {
       throw error;
     }
-    await refreshCache();
     const member = readDb().groupMembers.find((entry) => entry.id === memberId);
     if (!member) {
       throw new Error(`Member not found: ${memberId}`);
@@ -255,7 +252,6 @@ export async function updateGroupMemberStatus(
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Update group member status succeeded', { memberId, status, groupId });
   } catch (error) {
     logger.error('Update group member status failed', error, { memberId, status, groupId });
@@ -292,7 +288,6 @@ export async function deactivateGroupMember(memberId: string, groupId: string): 
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Deactivate group member succeeded', { memberId, groupId });
   } catch (error) {
     logger.error('Deactivate group member failed', error, { memberId, groupId });

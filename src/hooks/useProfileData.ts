@@ -5,7 +5,7 @@ import { UI_COPY } from '../data/constants';
 import { getProfile } from '../services/profileService';
 
 export function useProfileData() {
-  const { version } = useAppData();
+  const { versions } = useAppData();
 
   return useMemo(() => {
     const profile = getProfile();
@@ -20,5 +20,5 @@ export function useProfileData() {
         avatarUrl: profile?.avatarUrl,
       },
     };
-  }, [version]);
+  }, [versions.profile]);
 }

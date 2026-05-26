@@ -11,6 +11,7 @@ import type { GroupType } from '../types/models';
 import { formatDateForSupabase, isEndDateValid, parseSupabaseDate } from '../utils/date';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import { invalidateAfterUpdateGroup } from '../utils/mutationInvalidation';
 import { colors, layout, spacing, typography } from '../theme';
 import { safeBack } from '../utils/navigation';
 
@@ -21,8 +22,9 @@ interface EditGroupScreenProps {
 }
 
 export function EditGroupScreen({ groupId }: EditGroupScreenProps) {
-  const { version, refresh } = useAppData();
-  const group = useMemo(() => getGroupById(groupId), [groupId, version]);
+  const { versions, getGroupDetailVersion, invalidate } = useAppData();
+  const groupDetailVersion = getGroupDetailVersion(groupId);
+  const group = useMemo(() => getGroupById(groupId), [groupId, versions.groups, groupDetailVersion]);
 
   const [name, setName] = useState(group?.name ?? '');
   const [groupType, setGroupType] = useState<GroupType>(group?.type ?? 'Trip');
@@ -77,7 +79,7 @@ export function EditGroupScreen({ groupId }: EditGroupScreenProps) {
         startDate,
         endDate: endDate || null,
       });
-      await refresh();
+      invalidateAfterUpdateGroup(invalidate, groupId);
       logger.info('Update group details submit succeeded', { groupId });
       router.back();
     } catch (err) {

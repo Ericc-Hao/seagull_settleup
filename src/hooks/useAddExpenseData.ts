@@ -10,14 +10,19 @@ import { getCurrentUserId } from '../services/groupService';
 import { dollarsToCents, formatCAD, splitAmountEvenly } from '../utils/money';
 import { isoNow } from '../utils/date';
 import { createLogger } from '../utils/logger';
+import {
+  invalidateAfterCreatePersonalExpense,
+  invalidateAfterCreateSplitExpense,
+} from '../utils/mutationInvalidation';
 import { getCategoryPickerOptions } from '../utils/category';
 
 const logger = createLogger('useAddExpenseData');
 
 export function useAddExpenseData(groupId: string) {
-  const { version, refresh } = useAppData();
-  const members = useMemo(() => getGroupMembersByGroup(groupId), [groupId, version]);
-  const categories = useMemo(() => getCachedCategories(), [version]);
+  const { versions, getGroupDetailVersion, invalidate } = useAppData();
+  const groupDetailVersion = getGroupDetailVersion(groupId);
+  const members = useMemo(() => getGroupMembersByGroup(groupId), [groupId, versions.groups, groupDetailVersion]);
+  const categories = useMemo(() => getCachedCategories(), [versions.expenses]);
 
   const [kind, setKind] = useState<ExpenseType>('split');
   const [amountRaw, setAmountRaw] = useState('');
@@ -87,7 +92,11 @@ export function useAddExpenseData(groupId: string) {
           participantMemberIds: includedIds,
         });
       }
-      await refresh();
+      if (kind === 'personal') {
+        invalidateAfterCreatePersonalExpense(invalidate);
+      } else {
+        invalidateAfterCreateSplitExpense(invalidate, groupId);
+      }
       logger.info('Add expense submit succeeded', { groupId, type: kind });
     } catch (error) {
       logger.error('Add expense submit failed', error, { groupId, type: kind });

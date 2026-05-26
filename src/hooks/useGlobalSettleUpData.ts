@@ -10,7 +10,7 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('useGlobalSettleUpData');
 
 export function useGlobalSettleUpData() {
-  const { version, ready } = useAppData();
+  const { versions, ready } = useAppData();
 
   const { outgoingTransfers, settlementHistory } = useMemo(() => {
     if (!ready) {
@@ -25,7 +25,7 @@ export function useGlobalSettleUpData() {
       logger.error('Global pending transfers fetch failed', error);
       return { outgoingTransfers: [], settlementHistory: [] };
     }
-  }, [ready, version]);
+  }, [ready, versions.settlements, versions.groups]);
 
   return {
     ready,

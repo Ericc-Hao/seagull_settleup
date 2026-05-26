@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useAppData } from '../context/AppDataContext';
 import {
   calculateTeamSettlementPreview,
   getSettleableMembersWithProfiles,
@@ -11,6 +12,9 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('useTeamSettlement');
 
 export function useTeamSettlement(groupId: string, currentMemberId?: string) {
+  const { versions, getGroupDetailVersion } = useAppData();
+  const groupDetailVersion = getGroupDetailVersion(groupId);
+
   const [selectionVisible, setSelectionVisible] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [step, setStep] = useState<'select' | 'preview'>('select');
@@ -19,7 +23,10 @@ export function useTeamSettlement(groupId: string, currentMemberId?: string) {
   const [reviewing, setReviewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  const members = useMemo(() => getSettleableMembersWithProfiles(groupId), [groupId]);
+  const members = useMemo(
+    () => getSettleableMembersWithProfiles(groupId),
+    [groupId, versions.groups, groupDetailVersion, versions.settlements],
+  );
 
   useEffect(() => {
     if (!currentMemberId) {
@@ -114,7 +121,7 @@ export function useTeamSettlement(groupId: string, currentMemberId?: string) {
     } finally {
       setReviewing(false);
     }
-  }, [groupId, selectedMemberIds, validationError]);
+  }, [groupId, selectedMemberIds, validationError, versions.settlements, groupDetailVersion]);
 
   const openConfirm = useCallback(() => {
     if (!previewTransfer) {

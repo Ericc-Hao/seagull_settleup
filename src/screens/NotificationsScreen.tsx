@@ -10,6 +10,7 @@ import { NotificationsListSkeleton } from '../components/notifications/Notificat
 import { useAppData } from '../context/AppDataContext';
 import { useNotifications } from '../context/NotificationsContext';
 import { useInvitationActions } from '../hooks/useInvitationActions';
+import { invalidateAfterAcceptInvitation, invalidateAfterDeclineInvitation } from '../utils/mutationInvalidation';
 import {
   getInvitationDetail,
   invitationFallbackFromNotification,
@@ -68,7 +69,7 @@ export function NotificationsScreen() {
     clearOne,
     clearAll,
   } = useNotifications();
-  const { refresh: refreshAppData } = useAppData();
+  const { invalidate } = useAppData();
   const [selectedInvitation, setSelectedInvitation] = useState<PendingInvitationView | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
@@ -81,13 +82,24 @@ export function NotificationsScreen() {
     }, [hasLoadedOnce, refreshNotifications]),
   );
 
-  const onActionComplete = useCallback(async () => {
-    await Promise.all([refreshNotifications({ background: true }), refreshAppData()]);
+  const onAcceptComplete = useCallback(async () => {
+    invalidateAfterAcceptInvitation(invalidate);
+    await refreshNotifications({ background: true });
     setModalVisible(false);
     setSelectedInvitation(null);
-  }, [refreshAppData, refreshNotifications]);
+  }, [invalidate, refreshNotifications]);
 
-  const { accept, decline, processingId } = useInvitationActions(onActionComplete);
+  const onDeclineComplete = useCallback(async () => {
+    invalidateAfterDeclineInvitation(invalidate);
+    await refreshNotifications({ background: true });
+    setModalVisible(false);
+    setSelectedInvitation(null);
+  }, [invalidate, refreshNotifications]);
+
+  const { accept, decline, processingId } = useInvitationActions({
+    onAcceptComplete,
+    onDeclineComplete,
+  });
 
   const { unread, earlier } = useMemo(() => {
     const unreadItems = notifications.filter((item) => !item.isRead);

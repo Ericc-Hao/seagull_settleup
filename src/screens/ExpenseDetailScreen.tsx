@@ -22,13 +22,13 @@ interface ExpenseDetailScreenProps {
 }
 
 export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
-  const { version } = useAppData();
+  const { versions } = useAppData();
   const [receipt, setReceipt] = useState<ExpenseReceiptView | null>(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
 
-  const detail = useMemo(() => getExpenseDetailView(expenseId), [expenseId, version]);
-  const expense = useMemo(() => getExpenseById(expenseId), [expenseId, version]);
+  const detail = useMemo(() => getExpenseDetailView(expenseId), [expenseId, versions.expenses]);
+  const expense = useMemo(() => getExpenseById(expenseId), [expenseId, versions.expenses]);
 
   useEffect(() => {
     let mounted = true;
@@ -80,7 +80,7 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
     return () => {
       mounted = false;
     };
-  }, [expenseId, version, detail, expense?.receiptId]);
+  }, [expenseId, versions.expenses, detail, expense?.receiptId]);
 
   if (!detail) {
     return (

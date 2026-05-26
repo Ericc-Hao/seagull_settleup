@@ -1,6 +1,5 @@
 import { getCachedUserId } from '../lib/auth';
 import { mapGroup, mapGroupMember } from '../lib/mappers';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import type {
   CreateGroupInput,
@@ -10,6 +9,7 @@ import type {
 } from '../types/inputs';
 import type { Group, GroupInvitation, GroupMember } from '../types/models';
 import type { GroupCardView, GroupSelectorOption, GroupsSummaryView } from '../types/views';
+import { GROUP_COLUMNS } from '../lib/queryColumns';
 import { formatMonthYear } from '../utils/date';
 import { createLogger } from '../utils/logger';
 import { maskEmail, normalizeEmail } from '../utils/validation';
@@ -102,7 +102,6 @@ export async function createGroup(input: CreateGroupInput): Promise<Group> {
     }
     logger.info('Owner member insert succeeded', { table: 'group_members', groupId: group.id });
 
-    await refreshCache();
     logger.info('Create group succeeded', { table: 'groups', groupId: group.id });
     return getGroupById(group.id) ?? group;
   } catch (error) {
@@ -222,7 +221,6 @@ export async function createGroupWithInvitations(
       }
     }
 
-    await refreshCache();
     logger.info('Create group with invitations succeeded', {
       table: 'groups',
       groupId: group.id,
@@ -260,7 +258,6 @@ export async function updateGroup(groupId: string, input: UpdateGroupInput): Pro
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Update group succeeded', { table: 'groups', groupId });
     return getGroupOrThrow(groupId);
   } catch (error) {
@@ -299,7 +296,6 @@ export async function setGroupInactive(groupId: string): Promise<Group> {
       throw error;
     }
 
-    await refreshCache();
     logger.info('Set group inactive succeeded', { table: 'groups', groupId });
     return getGroupOrThrow(groupId);
   } catch (error) {
@@ -339,7 +335,6 @@ export async function deleteGroup(groupId: string): Promise<void> {
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Delete group succeeded', { groupId });
   } catch (error) {
     logger.error('Delete group failed', error, { groupId });
@@ -431,7 +426,7 @@ export function buildInactiveGroupCards(userId: string = getCurrentUserId()): Gr
 export async function fetchAccessibleGroups(): Promise<Group[]> {
   logger.info('Fetch accessible groups started', { table: 'groups' });
   try {
-    const { data, error } = await supabase.from('groups').select('*').order('name', { ascending: true });
+    const { data, error } = await supabase.from('groups').select(GROUP_COLUMNS).order('name', { ascending: true });
     if (error) {
       throw error;
     }

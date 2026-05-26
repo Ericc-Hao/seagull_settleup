@@ -16,21 +16,22 @@ const logger = createLogger('useSettleUpData');
 
 export function useSettleUpData(groupId: string, options?: { enabled?: boolean }) {
   const enabled = options?.enabled ?? true;
-  const { version, ready } = useAppData();
-  const group = useMemo(() => (enabled && groupId ? getGroupById(groupId) : undefined), [groupId, enabled, version]);
+  const { versions, ready, getGroupDetailVersion } = useAppData();
+  const groupDetailVersion = getGroupDetailVersion(groupId);
+  const group = useMemo(() => (enabled && groupId ? getGroupById(groupId) : undefined), [groupId, enabled, versions.groups, groupDetailVersion]);
   const currentMemberId = useMemo(() => {
     if (!enabled || !groupId || !ready) {
       return undefined;
     }
     return findMemberForUser(groupId, getCurrentUserId())?.id;
-  }, [enabled, groupId, ready, version]);
+  }, [enabled, groupId, ready, versions.groups, groupDetailVersion]);
 
   const members = useMemo(() => {
     if (!enabled || !groupId || !ready) {
       return [];
     }
     return getSettleableMembersWithProfiles(groupId);
-  }, [enabled, groupId, ready, version]);
+  }, [enabled, groupId, ready, versions.groups, groupDetailVersion]);
 
   const { outgoingTransfers, settlementHistory, showSettleTogether } = useMemo(() => {
     if (!enabled || !groupId || !ready || !group) {
@@ -66,7 +67,7 @@ export function useSettleUpData(groupId: string, options?: { enabled?: boolean }
         showSettleTogether: false,
       };
     }
-  }, [enabled, groupId, ready, group, version]);
+  }, [enabled, groupId, ready, group, versions.settlements, versions.expenses, versions.groups, groupDetailVersion]);
 
   return {
     group,

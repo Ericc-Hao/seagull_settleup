@@ -6,7 +6,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export interface Logger {
   debug: (message: string, context?: Record<string, unknown>) => void;
   info: (message: string, context?: Record<string, unknown>) => void;
-  warn: (message: string, context?: Record<string, unknown>) => void;
+  warn: (message: string, context?: Record<string, unknown>, error?: unknown) => void;
   error: (message: string, error?: unknown, context?: Record<string, unknown>) => void;
 }
 
@@ -162,8 +162,8 @@ export function createLogger(namespace: string): Logger {
     info(message, context) {
       writeLog(buildEntry('info', namespace, message, context));
     },
-    warn(message, context) {
-      writeLog(buildEntry('warn', namespace, message, context));
+    warn(message, context, error) {
+      writeLog(buildEntry('warn', namespace, message, context, error));
     },
     error(message, error, context) {
       writeLog(buildEntry('error', namespace, message, context, error));

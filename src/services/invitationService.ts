@@ -1,12 +1,16 @@
 import { mapGroupInvitation, mapGroupMember } from '../lib/mappers';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import type { GroupInvitationRow } from '../types/database';
 import type { CreateGroupInvitationInput } from '../types/inputs';
 import type { GroupInvitation, GroupMember } from '../types/models';
 import type { InvitationPreviewView, PendingInvitationView } from '../types/views';
-import { createLogger } from '../utils/logger';
+import {
+  GROUP_INVITATION_COLUMNS,
+  NOTIFICATION_LIST_LIMIT,
+  PENDING_INVITATION_SYNC_LIMIT,
+} from '../lib/queryColumns';
 import { formatInvitationNotificationBody } from '../utils/invitationCopy';
+import { createLogger } from '../utils/logger';
 import { isValidEmail, maskEmail, normalizeEmail } from '../utils/validation';
 import {
   buildGroupEmailOccupancy,
@@ -96,12 +100,14 @@ export function invitationFallbackFromNotification(notification: {
   };
 }
 
-async function loadNotificationFallbacksByInvitationId(): Promise<Map<string, InvitationDetailFallback>> {
+async function loadNotificationFallbacksByInvitationId(userId: string): Promise<Map<string, InvitationDetailFallback>> {
   const { data, error } = await supabase
     .from('notifications')
     .select('data, created_at')
+    .eq('user_id', userId)
     .eq('type', 'group_invitation')
-    .is('cleared_at', null);
+    .is('cleared_at', null)
+    .limit(NOTIFICATION_LIST_LIMIT);
 
   if (error) {
     logger.warn('Load notification fallbacks failed', { table: 'notifications' });
@@ -186,12 +192,15 @@ async function ensureNotificationForInvitationRow(
 async function enrichPendingInvitations(
   rows: GroupInvitationRow[],
   fallbackByInvitationId?: Map<string, InvitationDetailFallback>,
+  userId?: string,
 ): Promise<PendingInvitationView[]> {
   if (rows.length === 0) {
     return [];
   }
 
-  const fallbacks = fallbackByInvitationId ?? (await loadNotificationFallbacksByInvitationId());
+  const fallbacks =
+    fallbackByInvitationId ??
+    (userId ? await loadNotificationFallbacksByInvitationId(userId) : new Map<string, InvitationDetailFallback>());
   const groupIds = Array.from(new Set(rows.map((row) => row.group_id)));
   const inviterIds = Array.from(new Set(rows.map((row) => row.invited_by)));
 
@@ -263,7 +272,7 @@ export async function getInvitationDetail(
       .maybeSingle();
 
     const fallbackMap = fallback ? new Map([[invitationId, fallback]]) : undefined;
-    const [view] = await enrichPendingInvitations([row], fallbackMap);
+    const [view] = await enrichPendingInvitations([row], fallbackMap, row.invited_user_id ?? undefined);
     if (group?.name && view.groupName === 'this group') {
       view.groupName = group.name;
     }
@@ -571,7 +580,6 @@ export async function inviteMoreMembers(
       }
     }
 
-    await refreshCache();
     logger.info('Invite more members succeeded', {
       groupId,
       invitationCount: invitations.length,
@@ -604,7 +612,6 @@ export async function resendInvitation(invitationId: string): Promise<Invitation
     await assertGroupOwner(invitation.group_id, userId);
 
     const result = await sendInvitationEmail(invitationId);
-    await refreshCache();
     logger.info('Resend invitation succeeded', { invitationId, sent: result.sent, table: 'group_invitations' });
     return result;
   } catch (error) {
@@ -629,9 +636,10 @@ export async function syncPendingInvitationsForCurrentUser(): Promise<PendingInv
     const normalizedEmail = normalizeEmail(user.email);
     const { data, error } = await supabase
       .from('group_invitations')
-      .select('*')
+      .select(GROUP_INVITATION_COLUMNS)
       .eq('status', 'pending')
-      .or(`invited_user_id.eq.${user.id},invited_email.ilike.${normalizedEmail}`);
+      .or(`invited_user_id.eq.${user.id},invited_email.ilike.${normalizedEmail}`)
+      .limit(PENDING_INVITATION_SYNC_LIMIT);
 
     if (error) {
       throw error;
@@ -666,10 +674,9 @@ export async function syncPendingInvitationsForCurrentUser(): Promise<PendingInv
     }
 
     if (linked) {
-      await refreshCache();
     }
 
-    const views = await enrichPendingInvitations(rows);
+    const views = await enrichPendingInvitations(rows, undefined, user.id);
     logger.info('Sync pending invitations succeeded', { count: views.length, table: 'group_invitations' });
     return views;
   } catch (error) {
@@ -795,7 +802,7 @@ export async function getPendingInvitationByToken(token: string): Promise<Pendin
       return null;
     }
 
-    const views = await enrichPendingInvitations([row]);
+    const views = await enrichPendingInvitations([row], undefined, row.invited_user_id ?? undefined);
     const invitation = views[0] ?? null;
     logger.info('Pending invitation by token succeeded', {
       invitationId: invitation?.id,
@@ -885,7 +892,6 @@ export async function acceptInvitation(invitationId: string): Promise<AcceptInvi
     }
 
     await markInvitationNotificationsAsRead(invitationId);
-    await refreshCache();
 
     let groupName: string | undefined;
     const { data: groupRow } = await supabase.from('groups').select('name').eq('id', groupId).maybeSingle();
@@ -947,7 +953,6 @@ export async function declineInvitation(invitationId: string): Promise<void> {
 
     await markInvitationNotificationsAsRead(invitationId);
 
-    await refreshCache();
     logger.info('Decline invitation succeeded', { invitationId, table: 'group_invitations' });
   } catch (error) {
     logger.error('Decline invitation failed', error, { invitationId, table: 'group_invitations' });
@@ -1021,7 +1026,6 @@ export async function cancelInvitation(invitationId: string): Promise<void> {
       }
     }
 
-    await refreshCache();
     logger.info('Cancel invitation succeeded', { invitationId, table: 'group_invitations' });
   } catch (error) {
     logger.error('Cancel invitation failed', error, { invitationId, table: 'group_invitations' });

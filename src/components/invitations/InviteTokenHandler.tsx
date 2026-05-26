@@ -12,18 +12,18 @@ import { clearPendingInviteToken, getPendingInviteToken } from '../../lib/pendin
 import {
   getInvitationPreviewByToken,
   getPendingInvitationByToken,
-  syncPendingInvitationsForCurrentUser,
 } from '../../services/invitationService';
 import { colors, spacing, typography } from '../../theme';
 import type { PendingInvitationView } from '../../types/views';
 import { createLogger } from '../../utils/logger';
+import { invalidateAfterAcceptInvitation, invalidateAfterDeclineInvitation } from '../../utils/mutationInvalidation';
 import { maskEmail, normalizeEmail } from '../../utils/validation';
 import { InvitationActionModal } from './InvitationActionModal';
 
 const logger = createLogger('InviteTokenHandler');
 
 export function InviteTokenHandler() {
-  const { refresh } = useAppData();
+  const { invalidate, refreshNotifications } = useAppData();
   const { user, signOut } = useAuth();
   const [invitation, setInvitation] = useState<PendingInvitationView | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -39,11 +39,17 @@ export function InviteTokenHandler() {
   }, []);
 
   const onComplete = useCallback(async () => {
-    await refresh();
-    await syncPendingInvitationsForCurrentUser();
-  }, [refresh]);
+    invalidateAfterAcceptInvitation(invalidate);
+    void refreshNotifications();
+  }, [invalidate, refreshNotifications]);
 
-  const { accept, decline, processingId, clearError } = useInvitationActions(onComplete);
+  const { accept, decline, processingId, clearError } = useInvitationActions({
+    onAcceptComplete: onComplete,
+    onDeclineComplete: () => {
+      invalidateAfterDeclineInvitation(invalidate);
+      void refreshNotifications();
+    },
+  });
 
   useEffect(() => {
     let mounted = true;

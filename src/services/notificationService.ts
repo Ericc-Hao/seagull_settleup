@@ -1,6 +1,11 @@
 import { mapNotification } from '../lib/mappers';
+import {
+  NOTIFICATION_COLUMNS,
+  NOTIFICATION_LIST_LIMIT,
+} from '../lib/queryColumns';
 import { supabase } from '../lib/supabase';
 import type { Notification, NotificationData, NotificationType } from '../types/models';
+import { isJwtTimingError } from '../utils/authErrors';
 import { isoNow } from '../utils/date';
 import {
   formatInvitationNotificationBody,
@@ -44,6 +49,34 @@ async function getCurrentUserId(): Promise<string> {
   return data.user.id;
 }
 
+async function withAuthRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  alreadyRetried = false,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (alreadyRetried || !isJwtTimingError(error)) {
+      throw error;
+    }
+
+    logger.warn(`${operationName} failed due to JWT timing error`, {
+      reason: 'jwt_timing_error',
+      table: 'notifications',
+    });
+    logger.info(`${operationName} retry after refresh started`, { table: 'notifications' });
+
+    const { error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      throw refreshError;
+    }
+
+    logger.info(`${operationName} retry after refresh succeeded`, { table: 'notifications' });
+    return withAuthRetry(operation, operationName, true);
+  }
+}
+
 function normalizeGroupInvitationNotification(notification: Notification): Notification {
   if (notification.type !== 'group_invitation') {
     return notification;
@@ -78,23 +111,33 @@ function normalizeGroupInvitationNotification(notification: Notification): Notif
 export async function getNotifications(): Promise<Notification[]> {
   logger.info('Fetch notifications started', { table: 'notifications' });
   try {
-    const userId = await getCurrentUserId();
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .is('cleared_at', null)
-      .order('created_at', { ascending: false });
+    return await withAuthRetry(async () => {
+      const userId = await getCurrentUserId();
+      const { data, error } = await supabase
+        .from('notifications')
+        .select(NOTIFICATION_COLUMNS)
+        .eq('user_id', userId)
+        .is('cleared_at', null)
+        .order('created_at', { ascending: false })
+        .limit(NOTIFICATION_LIST_LIMIT);
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
 
-    const notifications = (data ?? []).map(mapNotification).map(normalizeGroupInvitationNotification);
-    logger.info('Fetch notifications succeeded', { count: notifications.length, table: 'notifications' });
-    return notifications;
+      const notifications = (data ?? []).map(mapNotification).map(normalizeGroupInvitationNotification);
+      logger.info('Fetch notifications succeeded', { count: notifications.length, table: 'notifications' });
+      return notifications;
+    }, 'Fetch notifications');
   } catch (error) {
-    logger.error('Fetch notifications failed', error, { table: 'notifications' });
+    if (isJwtTimingError(error)) {
+      logger.warn('Fetch notifications failed due to JWT timing error', {
+        reason: 'jwt_timing_error',
+        table: 'notifications',
+      });
+    } else {
+      logger.error('Fetch notifications failed', error, { table: 'notifications' });
+    }
     throw error;
   }
 }
@@ -105,11 +148,12 @@ export async function getUnreadNotifications(): Promise<Notification[]> {
     const userId = await getCurrentUserId();
     const { data, error } = await supabase
       .from('notifications')
-      .select('*')
+      .select(NOTIFICATION_COLUMNS)
       .eq('user_id', userId)
       .eq('is_read', false)
       .is('cleared_at', null)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(NOTIFICATION_LIST_LIMIT);
 
     if (error) {
       throw error;
@@ -127,23 +171,32 @@ export async function getUnreadNotifications(): Promise<Notification[]> {
 export async function getUnreadCount(): Promise<number> {
   logger.info('Fetch unread count started', { table: 'notifications' });
   try {
-    const userId = await getCurrentUserId();
-    const { count, error } = await supabase
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('is_read', false)
-      .is('cleared_at', null);
+    return await withAuthRetry(async () => {
+      const userId = await getCurrentUserId();
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('is_read', false)
+        .is('cleared_at', null);
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
 
-    const unreadCount = count ?? 0;
-    logger.info('Fetch unread count succeeded', { unreadCount, table: 'notifications' });
-    return unreadCount;
+      const unreadCount = count ?? 0;
+      logger.info('Fetch unread count succeeded', { unreadCount, table: 'notifications' });
+      return unreadCount;
+    }, 'Fetch unread count');
   } catch (error) {
-    logger.error('Fetch unread count failed', error, { table: 'notifications' });
+    if (isJwtTimingError(error)) {
+      logger.warn('Fetch unread count failed due to JWT timing error', {
+        reason: 'jwt_timing_error',
+        table: 'notifications',
+      });
+    } else {
+      logger.error('Fetch unread count failed', error, { table: 'notifications' });
+    }
     throw error;
   }
 }

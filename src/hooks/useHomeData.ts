@@ -11,7 +11,7 @@ import { getProfile } from '../services/profileService';
 import { formatCAD } from '../utils/money';
 
 export function useHomeData() {
-  const { version, ready } = useAppData();
+  const { versions, ready } = useAppData();
 
   return useMemo(() => {
     const overview = getHomeOverview();
@@ -43,5 +43,5 @@ export function useHomeData() {
       })),
       splitGroups: getHomeSplitGroups(),
     };
-  }, [ready, version]);
+  }, [ready, versions.home, versions.profile, versions.groups, versions.expenses, versions.settlements]);
 }

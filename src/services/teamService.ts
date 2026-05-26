@@ -1,5 +1,4 @@
 import { mapTeam } from '../lib/mappers';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import type { Team } from '../types/models';
 import { readDb } from './dbHelpers';
@@ -37,7 +36,6 @@ export async function createTeam(input: {
     }
   }
 
-  await refreshCache();
   return team;
 }
 
@@ -46,5 +44,4 @@ export async function deleteTeam(teamId: string): Promise<void> {
   if (error) {
     throw error;
   }
-  await refreshCache();
 }

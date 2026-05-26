@@ -26,3 +26,7 @@ export function readCache(): DatabaseSnapshot {
 export function setCache(snapshot: DatabaseSnapshot): void {
   cache = snapshot;
 }
+
+export function mergeCache(patch: Partial<DatabaseSnapshot>): void {
+  cache = { ...cache, ...patch };
+}

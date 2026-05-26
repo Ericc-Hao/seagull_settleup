@@ -5,6 +5,7 @@ import { ensureProfileExists } from '../services/profileService';
 import { inviteMoreMembers } from '../services/invitationService';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import { invalidateAfterInviteMember } from '../utils/mutationInvalidation';
 import {
   hasDuplicateEmail,
   isValidEmail,
@@ -15,7 +16,7 @@ import {
 const logger = createLogger('useInviteMembers');
 
 export function useInviteMembers(groupId: string) {
-  const { refresh } = useAppData();
+  const { invalidate, refreshNotifications } = useAppData();
   const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
   const [emailValue, setEmailValue] = useState('');
   const [emailError, setEmailError] = useState<string | undefined>();
@@ -73,7 +74,8 @@ export function useInviteMembers(groupId: string) {
 
     try {
       const result = await inviteMoreMembers(groupId, invitedEmails);
-      await refresh();
+      invalidateAfterInviteMember(invalidate, groupId);
+      void refreshNotifications();
       setWarnings(result.warnings);
       setInvitedEmails([]);
       logger.info('Invite more members submit succeeded', { groupId, invitationCount: result.invitations.length });
@@ -86,7 +88,7 @@ export function useInviteMembers(groupId: string) {
     } finally {
       setSubmitting(false);
     }
-  }, [groupId, invitedEmails, refresh, submitting]);
+  }, [groupId, invitedEmails, invalidate, refreshNotifications, submitting]);
 
   return {
     invitedEmails,

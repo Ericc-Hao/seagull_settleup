@@ -14,19 +14,32 @@ import { PendingInvitationCard } from '../../src/components/invitations/PendingI
 import { useAppData } from '../../src/context/AppDataContext';
 import { useNotifications } from '../../src/context/NotificationsContext';
 import { useGroupsData } from '../../src/hooks/useGroupsData';
+import { useStaleFocusRefresh } from '../../src/hooks/useStaleFocusRefresh';
 import { useInvitationActions } from '../../src/hooks/useInvitationActions';
+import { invalidateAfterAcceptInvitation, invalidateAfterDeclineInvitation } from '../../src/utils/mutationInvalidation';
 import { layout } from '../../src/theme';
 
 export default function GroupsTabScreen() {
   const data = useGroupsData();
   const { unreadCount } = useNotifications();
-  const { refresh: refreshAppData } = useAppData();
+  const { invalidate, refreshNotifications } = useAppData();
 
-  const onActionComplete = useCallback(async () => {
-    await refreshAppData();
-  }, [refreshAppData]);
+  const onAcceptComplete = useCallback(async () => {
+    invalidateAfterAcceptInvitation(invalidate);
+    void refreshNotifications();
+  }, [invalidate, refreshNotifications]);
 
-  const { accept, decline, processingId } = useInvitationActions(onActionComplete);
+  const onDeclineComplete = useCallback(() => {
+    invalidateAfterDeclineInvitation(invalidate);
+    void refreshNotifications();
+  }, [invalidate, refreshNotifications]);
+
+  const { accept, decline, processingId } = useInvitationActions({
+    onAcceptComplete,
+    onDeclineComplete,
+  });
+
+  useStaleFocusRefresh({ types: ['groups', 'invitations', 'settlements', 'notifications'] });
 
   return (
     <ScreenLayout

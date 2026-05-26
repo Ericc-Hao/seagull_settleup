@@ -8,7 +8,7 @@ import { formatCAD } from '../utils/money';
 export type ExpenseFilter = 'all' | 'personal' | 'split';
 
 export function useExpensesData() {
-  const { version } = useAppData();
+  const { versions } = useAppData();
   const [filter, setFilter] = useState<ExpenseFilter>('all');
 
   const data = useMemo(() => {
@@ -38,7 +38,7 @@ export function useExpensesData() {
       split,
       isEmpty,
     };
-  }, [version, filter]);
+  }, [versions.expenses, filter]);
 
   return { ...data, filter, setFilter };
 }

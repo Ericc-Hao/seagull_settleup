@@ -4,9 +4,9 @@ import { useAuth } from '../src/context/AuthContext';
 import { AuthLoadingScreen } from '../src/screens/AuthScreens';
 
 export default function IndexRoute() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, authInitialized } = useAuth();
 
-  if (loading) {
+  if (loading || !authInitialized) {
     return <AuthLoadingScreen />;
   }
 

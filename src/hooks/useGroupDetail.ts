@@ -17,11 +17,16 @@ import { formatOptionalDateRange } from '../utils/date';
 import { formatCAD } from '../utils/money';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import {
+  invalidateAfterDeleteGroup,
+  invalidateAfterSetGroupInactive,
+} from '../utils/mutationInvalidation';
 
 const logger = createLogger('useGroupDetail');
 
 export function useGroupDetail(groupId: string) {
-  const { version, refresh, ready } = useAppData();
+  const { versions, ready, getGroupDetailVersion, invalidate } = useAppData();
+  const groupDetailVersion = getGroupDetailVersion(groupId);
   const [members, setMembers] = useState<GroupMemberWithProfile[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingGroup, setLoadingGroup] = useState(true);
@@ -30,7 +35,10 @@ export function useGroupDetail(groupId: string) {
   const [actionError, setActionError] = useState<string | undefined>();
   const [actionLoading, setActionLoading] = useState(false);
 
-  const cachedGroup = useMemo(() => getGroupById(groupId), [groupId, version]);
+  const cachedGroup = useMemo(
+    () => getGroupById(groupId),
+    [groupId, versions.groups, groupDetailVersion],
+  );
   const group = cachedGroup ?? remoteGroup;
 
   useEffect(() => {
@@ -89,11 +97,11 @@ export function useGroupDetail(groupId: string) {
       return 0;
     }
     return getGroupExpenses(groupId, readDb()).reduce((sum, expense) => sum + expense.amountCents, 0);
-  }, [group, groupId, version]);
+  }, [group, groupId, versions.expenses, groupDetailVersion]);
 
   const recentExpenses = useMemo(
     () => (group ? getRecentGroupExpensesForCurrentUser(groupId, 5) : []),
-    [group, groupId, version],
+    [group, groupId, versions.expenses, groupDetailVersion],
   );
 
   const loadMembers = useCallback(async () => {
@@ -116,7 +124,7 @@ export function useGroupDetail(groupId: string) {
 
   useEffect(() => {
     void loadMembers();
-  }, [loadMembers, version]);
+  }, [loadMembers, versions.groups, groupDetailVersion]);
 
   const setInactive = useCallback(async () => {
     setActionLoading(true);
@@ -124,7 +132,7 @@ export function useGroupDetail(groupId: string) {
     logger.info('Set group inactive confirmation started', { groupId });
     try {
       await setGroupInactive(groupId);
-      await refresh();
+      invalidateAfterSetGroupInactive(invalidate, groupId);
       logger.info('Set group inactive confirmation succeeded', { groupId });
     } catch (error) {
       logger.error('Set group inactive confirmation failed', error, { groupId });
@@ -133,7 +141,7 @@ export function useGroupDetail(groupId: string) {
     } finally {
       setActionLoading(false);
     }
-  }, [groupId, refresh]);
+  }, [groupId, invalidate]);
 
   const removeGroup = useCallback(async () => {
     setActionLoading(true);
@@ -141,7 +149,7 @@ export function useGroupDetail(groupId: string) {
     logger.info('Delete group confirmation started', { groupId });
     try {
       await deleteGroup(groupId);
-      await refresh();
+      invalidateAfterDeleteGroup(invalidate, groupId);
       logger.info('Delete group confirmation succeeded', { groupId });
     } catch (error) {
       logger.error('Delete group confirmation failed', error, { groupId });
@@ -150,7 +158,7 @@ export function useGroupDetail(groupId: string) {
     } finally {
       setActionLoading(false);
     }
-  }, [groupId, refresh]);
+  }, [groupId, invalidate]);
 
   return {
     group,

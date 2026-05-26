@@ -4,7 +4,6 @@ import {
   optimizeTransfers,
 } from '../core/settlement';
 import type { MemberBalance } from '../core/settlement/types';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import { mapSettlement } from '../lib/mappers';
 import type { GroupMember, Settlement, SettlementMode } from '../types/models';
@@ -17,6 +16,7 @@ import {
   type SettlementMemberInfo,
 } from '../utils/settlementMember';
 import { formatCAD } from '../utils/money';
+import { createLogger } from '../utils/logger';
 import { buildPaymentMessage, buildPaymentDetailsCopyText } from '../utils/paymentCopy';
 import {
   findMemberForUser,
@@ -29,7 +29,7 @@ import {
   readDb,
 } from './dbHelpers';
 import { getCachedUserId } from '../lib/auth';
-import { createLogger } from '../utils/logger';
+import { SETTLEMENT_COLUMNS, SETTLEMENT_LIST_LIMIT } from '../lib/queryColumns';
 
 function getCurrentUserId(): string {
   return getCachedUserId();
@@ -79,7 +79,11 @@ interface SettlementTeamMeta {
 export async function getSettlements(groupId?: string): Promise<Settlement[]> {
   logger.info('Fetch settlements started', { table: 'settlements', groupId });
   try {
-    let query = supabase.from('settlements').select('*').order('created_at', { ascending: false });
+    let query = supabase
+      .from('settlements')
+      .select(SETTLEMENT_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(SETTLEMENT_LIST_LIMIT);
     if (groupId) {
       query = query.eq('group_id', groupId);
     }
@@ -989,7 +993,6 @@ export async function markSettlementAsPaid(settlementId: string): Promise<void> 
   if (error) {
     throw error;
   }
-  await refreshCache();
 }
 
 export async function markTransferAsPaid(
@@ -1039,7 +1042,6 @@ export async function markTransferAsPaid(
       throw settlementError;
     }
 
-    await refreshCache();
     logger.info('Mark as paid succeeded', { table: 'settlements', groupId, mode: transfer.mode });
   } catch (error) {
     logger.error('Mark as paid failed', error, { table: 'settlements', groupId, mode: transfer.mode });
@@ -1153,7 +1155,6 @@ export async function markTeamTransferAsPaid(input: MarkTeamTransferAsPaidInput)
       throw settlementError;
     }
 
-    await refreshCache();
     if (isZeroPayment) {
       logger.info('Zero-payment team settlement confirmed', { table: 'settlements', groupId });
     } else {

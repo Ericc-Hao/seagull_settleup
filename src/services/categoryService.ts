@@ -1,5 +1,4 @@
 import { mapCategory } from '../lib/mappers';
-import { refreshCache } from '../lib/supabaseSnapshot';
 import { supabase } from '../lib/supabase';
 import type { Category } from '../types/models';
 import { createLogger } from '../utils/logger';
@@ -62,7 +61,6 @@ export async function createCategory(input: {
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Create category succeeded', { table: 'categories', categoryId: data.id });
     return mapCategory(data);
   } catch (error) {
@@ -92,7 +90,6 @@ export async function updateCategory(
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Update category succeeded', { table: 'categories', categoryId });
     return mapCategory(data);
   } catch (error) {
@@ -108,7 +105,6 @@ export async function deleteCategory(categoryId: string): Promise<void> {
     if (error) {
       throw error;
     }
-    await refreshCache();
     logger.info('Delete category succeeded', { table: 'categories', categoryId });
   } catch (error) {
     logger.error('Delete category failed', error, { table: 'categories', categoryId });

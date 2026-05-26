@@ -17,12 +17,13 @@ interface ManageMembersScreenProps {
 }
 
 export function ManageMembersScreen({ groupId }: ManageMembersScreenProps) {
-  const { version } = useAppData();
+  const { versions, getGroupDetailVersion } = useAppData();
+  const groupDetailVersion = getGroupDetailVersion(groupId);
   const [members, setMembers] = useState<GroupMemberWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMember, setSelectedMember] = useState<GroupMemberWithProfile | null>(null);
 
-  const group = useMemo(() => getGroupById(groupId), [groupId, version]);
+  const group = useMemo(() => getGroupById(groupId), [groupId, versions.groups, groupDetailVersion]);
   const userId = getCurrentUserId();
   const isOwner = group?.ownerId === userId;
   const currentUserRole = isOwner ? 'owner' : 'member';
@@ -39,7 +40,7 @@ export function ManageMembersScreen({ groupId }: ManageMembersScreenProps) {
 
   useEffect(() => {
     void loadMembers();
-  }, [loadMembers, version]);
+  }, [loadMembers, versions.groups, groupDetailVersion]);
 
   const memberActions = useGroupMemberActions(groupId, loadMembers);
 

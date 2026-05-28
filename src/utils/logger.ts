@@ -7,7 +7,12 @@ export interface Logger {
   debug: (message: string, context?: Record<string, unknown>) => void;
   info: (message: string, context?: Record<string, unknown>) => void;
   warn: (message: string, context?: Record<string, unknown>, error?: unknown) => void;
-  error: (message: string, error?: unknown, context?: Record<string, unknown>) => void;
+  error: (
+    message: string,
+    error?: unknown,
+    context?: Record<string, unknown>,
+    options?: { expected?: boolean },
+  ) => void;
 }
 
 export interface LogEntry {
@@ -125,7 +130,7 @@ function buildEntry(
   };
 }
 
-function writeLog(entry: LogEntry): void {
+function writeLog(entry: LogEntry, options?: { expected?: boolean }): void {
   if (!shouldLog(entry.level)) {
     return;
   }
@@ -138,7 +143,9 @@ function writeLog(entry: LogEntry): void {
     entry.error ? { error: entry.error } : null,
   ].filter(Boolean);
 
-  switch (entry.level) {
+  const effectiveLevel = entry.level === 'error' && options?.expected ? 'warn' : entry.level;
+
+  switch (effectiveLevel) {
     case 'debug':
       console.debug(prefix, ...details);
       break;
@@ -165,8 +172,8 @@ export function createLogger(namespace: string): Logger {
     warn(message, context, error) {
       writeLog(buildEntry('warn', namespace, message, context, error));
     },
-    error(message, error, context) {
-      writeLog(buildEntry('error', namespace, message, context, error));
+    error(message, error, context, options) {
+      writeLog(buildEntry('error', namespace, message, context, error), options);
     },
   };
 }

@@ -126,13 +126,15 @@ export default function ExpensesTabScreen() {
       ) : null}
 
       {isEmpty ? (
-        <EmptyStateCard
-          title="No expenses yet"
-          message="Add your first transaction to start building your monthly overview."
-          ctaLabel="Add Expense"
-          ctaIcon="document-plus"
-          onPress={() => router.push('/add-expense')}
-        />
+        <View style={{ marginTop: 10 }}>
+          <EmptyStateCard
+            title="No expenses yet"
+            message="Add your first transaction to start building your monthly overview."
+            ctaLabel="Add Expense"
+            ctaIcon="document-plus"
+            onPress={() => router.push('/add-expense')}
+          />
+        </View>
       ) : null}
     </ScreenLayout>
   );

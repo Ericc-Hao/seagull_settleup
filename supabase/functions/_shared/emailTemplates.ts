@@ -41,8 +41,14 @@ function buildLogoMarkup(iconUrl?: string): string {
 
   return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="${logoContainerStyle}">
     <tr>
-      <td align="center" valign="middle" width="56" height="56" style="width:56px;height:56px;font-size:18px;font-weight:700;color:#53618A;font-family:${FONT_STACK};">
-        SS
+      <td align="center" valign="middle" width="56" height="56" style="width:56px;height:56px;padding:0;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56" role="img" aria-label="Seagull Split">
+          <rect width="56" height="56" rx="18" fill="#EEF1FF"/>
+          <rect x="8" y="8" width="40" height="40" rx="14" fill="#B1B2FF"/>
+          <path d="M18 34c6-8 14-8 20 0" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" fill="none"/>
+          <circle cx="22" cy="24" r="2.5" fill="#FFFFFF"/>
+          <circle cx="34" cy="24" r="2.5" fill="#FFFFFF"/>
+        </svg>
       </td>
     </tr>
   </table>`;

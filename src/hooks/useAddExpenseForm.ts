@@ -21,11 +21,9 @@ import {
 } from '../utils/mutationInvalidation';
 import { addCents, dollarsToCents, formatAmountInputValue, splitAmountEvenly } from '../utils/money';
 
-const logger = createLogger('useAddExpenseForm');
+import { filterSplitSelectableMembers, isSplitSelectableMember } from '../utils/groupParticipants';
 
-function isActiveMember(member: GroupMemberWithProfile): boolean {
-  return member.role === 'owner' || (member.invitationStatus === 'active' && member.isActive !== false);
-}
+const logger = createLogger('useAddExpenseForm');
 
 function sanitizeAmountInput(value: string): string {
   const cleaned = value.replace(/[^0-9.]/g, '');
@@ -95,8 +93,8 @@ export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuer
     [groupsQuery.groups, selectedGroupId],
   );
 
-  const activeMembers = useMemo(() => members.filter(isActiveMember), [members]);
-  const payerMembers = activeMembers;
+  const selectableMembers = useMemo(() => filterSplitSelectableMembers(members), [members]);
+  const payerMembers = selectableMembers;
 
   const selectedGroupRecord = selectedGroupId ? getGroupById(selectedGroupId) : undefined;
   const isOwner = selectedGroupRecord?.ownerId === userId;
@@ -116,20 +114,21 @@ export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuer
     logger.info('Group members fetch started', { groupId });
     try {
       const rows = await getGroupMembersWithProfiles(groupId);
-      setMembers(rows);
-      const activeIds = rows.filter(isActiveMember).map((m) => m.id);
-      setSplitMemberIds(activeIds);
+      const selectable = filterSplitSelectableMembers(rows);
+      setMembers(selectable);
+      const selectableIds = selectable.map((m) => m.id);
+      setSplitMemberIds(selectableIds);
 
-      const currentMember = rows.find((m) => m.userId === userId && isActiveMember(m));
-      setPayerMemberId(currentMember?.id ?? activeIds[0] ?? '');
+      const currentMember = selectable.find((m) => m.userId === userId && isSplitSelectableMember(m));
+      setPayerMemberId(currentMember?.id ?? selectableIds[0] ?? '');
 
       const equalMap: Record<string, string> = {};
-      for (const id of activeIds) {
+      for (const id of selectableIds) {
         equalMap[id] = '';
       }
       setCustomAmounts(equalMap);
 
-      logger.info('Group members fetch succeeded', { groupId, count: rows.length });
+      logger.info('Group members fetch succeeded', { groupId, count: selectable.length });
     } catch (error) {
       logger.error('Group members fetch failed', error, { groupId });
       setMembers([]);
@@ -366,7 +365,7 @@ export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuer
     setShowGroupModal,
     members,
     membersLoading,
-    activeMembers,
+    activeMembers: selectableMembers,
     payerMembers,
     payerMemberId,
     setPayerMemberId: (id: string) => {

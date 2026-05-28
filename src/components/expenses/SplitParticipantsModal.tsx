@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { GroupMemberWithProfile } from '../../types/views';
+import { filterSplitSelectableMembers, isPendingParticipant } from '../../utils/groupParticipants';
 import { colors, layout, radii, spacing, typography } from '../../theme';
 import { Icon } from '../Icon';
 import { PrimaryButton } from '../PrimaryButton';
@@ -43,9 +44,8 @@ export function SplitParticipantsModal({
     }
   }, [visible, selectedMemberIds]);
 
-  const activeMemberIds = members
-    .filter((m) => m.role === 'owner' || (m.invitationStatus === 'active' && m.isActive !== false))
-    .map((m) => m.id);
+  const selectableMembers = filterSplitSelectableMembers(members);
+  const selectableMemberIds = selectableMembers.map((m) => m.id);
 
   const toggle = (memberId: string) => {
     setDraftIds((current) =>
@@ -55,7 +55,7 @@ export function SplitParticipantsModal({
   };
 
   const selectAll = () => {
-    setDraftIds(activeMemberIds);
+    setDraftIds(selectableMemberIds);
     setError(undefined);
   };
 
@@ -105,9 +105,9 @@ export function SplitParticipantsModal({
           </View>
 
           <ScrollView contentContainerStyle={{ gap: spacing.xs }}>
-            {members.map((member) => {
+            {selectableMembers.map((member) => {
               const selected = draftIds.includes(member.id);
-              const isPending = member.invitationStatus === 'pending';
+              const isPending = isPendingParticipant(member);
               return (
                 <Pressable
                   key={member.id}

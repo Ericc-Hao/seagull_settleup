@@ -1,8 +1,10 @@
 import { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
-import { colors, radii, shadows, spacing, typography } from '../theme';
+import { colors, radii, spacing, typography } from '../theme';
 import { Icon, IconName } from './Icon';
+import { ShadowSurface } from './layout/ShadowSurface';
+import { VStack } from './layout/Stack';
 
 export function FormInputCard({
   title,
@@ -14,21 +16,18 @@ export function FormInputCard({
   children: ReactNode;
 }) {
   return (
-    <View
-      style={{
-        backgroundColor: colors.white,
-        borderRadius: radii.xl,
-        padding: spacing.lg,
-        gap: spacing.md,
-        ...shadows.card,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        {icon ? <Icon name={icon} size={18} color={colors.primary} /> : null}
-        <Text style={typography.bodyMedium}>{title}</Text>
-      </View>
-      {children}
-    </View>
+    <ShadowSurface shadow="card" borderRadius={radii.xl} innerStyle={{ padding: spacing.lg }}>
+      <VStack gap={spacing.md}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {icon ? (
+            <View style={{ marginRight: spacing.sm }}>
+              <Icon name={icon} size={18} color={colors.primary} />
+            </View>
+          ) : null}
+          <Text style={typography.bodyMedium}>{title}</Text>
+        </View>
+        {children}
+      </VStack>
+    </ShadowSurface>
   );
 }
-

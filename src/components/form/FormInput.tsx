@@ -23,7 +23,7 @@ export function FormInput({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }) {
   return (
-    <View style={{ gap: spacing.xs }}>
+    <View>
       <View style={fieldRowStyle}>
         <TextInput
           value={value}
@@ -34,16 +34,21 @@ export function FormInput({
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           autoCorrect={false}
-          style={[typography.body, { flex: 1, padding: 0 }]}
+          style={[typography.body, { flex: 1, padding: 0, color: colors.textPrimary }]}
         />
         {clearable && value.length > 0 ? (
-          <Pressable onPress={() => onChangeText('')} hitSlop={8}>
+          <Pressable onPress={() => onChangeText('')} hitSlop={8} style={{ marginLeft: spacing.sm }}>
             <Icon name="x-mark" size={18} color={colors.textTertiary} strokeWidth={1.5} />
           </Pressable>
         ) : null}
       </View>
       {error ? (
-        <Text style={[typography.caption, { color: colors.danger, paddingHorizontal: 2 }]}>
+        <Text
+          style={[
+            typography.caption,
+            { color: colors.danger, paddingHorizontal: 2, marginTop: spacing.xs },
+          ]}
+        >
           {error}
         </Text>
       ) : null}
@@ -54,9 +59,10 @@ export function FormInput({
 const fieldRowStyle = {
   flexDirection: 'row' as const,
   alignItems: 'center' as const,
-  backgroundColor: colors.background,
+  backgroundColor: colors.white,
   borderRadius: radii.md,
+  borderWidth: 1,
+  borderColor: colors.borderSubtle,
   paddingHorizontal: spacing.md,
   paddingVertical: 12,
-  gap: spacing.sm,
 };

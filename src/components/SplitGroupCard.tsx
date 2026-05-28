@@ -2,8 +2,9 @@ import { Pressable, Text, View } from 'react-native';
 
 import { formatCAD } from '../utils/money';
 import type { GroupCardView } from '../types/views';
-import { colors, radii, shadows, spacing, typography } from '../theme';
+import { colors, radii, spacing, typography } from '../theme';
 import { Icon } from './Icon';
+import { ShadowSurface } from './layout/ShadowSurface';
 
 export function SplitGroupCard({
   group,
@@ -23,76 +24,61 @@ export function SplitGroupCard({
 
   if (layout === 'grid' || layout === 'full') {
     return (
-      <Pressable
-        onPress={onPress}
-        style={[
-          {
-            width: '100%',
+      <ShadowSurface shadow="cardSoft" borderRadius={radii.xl}>
+        <Pressable
+          onPress={onPress}
+          style={{
             flexDirection: 'row',
             alignItems: 'center',
-            gap: spacing.md,
-            backgroundColor: colors.white,
-            borderRadius: radii.xl,
             padding: spacing.md,
-            ...shadows.cardSoft,
-          },
-        ]}
-      >
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 24,
-            backgroundColor: colors.background,
-            alignItems: 'center',
-            justifyContent: 'center',
           }}
         >
-          <Icon name="user-group" size={20} color={colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={typography.bodyMedium}>{group.name}</Text>
-          <Text style={[typography.caption, { color: balanceColor, marginTop: 2 }]}>
-            {group.balanceLabel || 'No pending balance'}
-          </Text>
-        </View>
-        <Icon name="chevron-right" size={18} color={colors.textTertiary} />
-      </Pressable>
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: colors.background,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: spacing.md,
+            }}
+          >
+            <Icon name="user-group" size={20} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={typography.bodyMedium}>{group.name}</Text>
+            <Text style={[typography.caption, { color: balanceColor, marginTop: 2 }]}>
+              {group.balanceLabel || 'No pending balance'}
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={18} color={colors.textTertiary} />
+        </Pressable>
+      </ShadowSurface>
     );
   }
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={[
-        {
-          width: 168,
-          backgroundColor: colors.white,
-          borderRadius: radii.xl,
-          padding: spacing.md,
-          marginRight: spacing.md,
-          ...shadows.cardSoft,
-        },
-      ]}
-    >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: colors.background,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon name="user-group" size={18} color={colors.primary} />
+    <ShadowSurface shadow="cardSoft" borderRadius={radii.xl} style={{ marginRight: spacing.md, width: 168 }}>
+      <Pressable onPress={onPress} style={{ padding: spacing.md }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: colors.background,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="user-group" size={18} color={colors.primary} />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Icon name="user-group" size={14} color={colors.textSecondary} />
+            <Text style={[typography.caption, { marginLeft: 4 }]}>{group.memberCount}</Text>
+          </View>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Icon name="user-group" size={14} color={colors.textSecondary} />
-          <Text style={typography.caption}>{group.memberCount}</Text>
-        </View>
-      </View>
       <Text style={[typography.bodyMedium, { marginTop: spacing.sm }]} numberOfLines={1}>
         {group.name}
       </Text>
@@ -107,6 +93,7 @@ export function SplitGroupCard({
       ) : (
         <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.sm }]}>No pending balance</Text>
       )}
-    </Pressable>
+      </Pressable>
+    </ShadowSurface>
   );
 }

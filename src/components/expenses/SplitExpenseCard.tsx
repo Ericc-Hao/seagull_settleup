@@ -85,19 +85,20 @@ export function SplitExpenseCard({
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
         paddingHorizontal: layout.cardPadding,
         paddingVertical: 14,
         borderBottomWidth: showDivider ? 1 : 0,
         borderBottomColor: colors.borderSubtle,
       }}
     >
-      <CategoryIconBadge
-        categoryKey={categoryKey}
-        categoryName={categoryName}
-        categoryId={categoryId}
-        size="sm"
-      />
+      <View style={{ marginRight: 12 }}>
+        <CategoryIconBadge
+          categoryKey={categoryKey}
+          categoryName={categoryName}
+          categoryId={categoryId}
+          size="sm"
+        />
+      </View>
       <View style={{ flex: 1 }}>
         <Text style={typography.bodyMedium}>{title}</Text>
         {secondaryLine ? (
@@ -110,7 +111,9 @@ export function SplitExpenseCard({
           {statusLabel}
         </Text>
       </View>
-      <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{formatCAD(myShareAmountCents)}</Text>
+      <Text style={[typography.bodyMedium, { color: colors.textPrimary, marginRight: 8 }]}>
+        {formatCAD(myShareAmountCents)}
+      </Text>
       {showChevron ? <Icon name="chevron-right" size={16} color={colors.textTertiary} /> : null}
     </Pressable>
   );

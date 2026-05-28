@@ -1,8 +1,10 @@
 import { Text, View } from 'react-native';
 
-import { colors, radii, shadows, spacing, typography } from '../theme';
+import { colors, radii, spacing, typography } from '../theme';
 import { Icon, IconName } from './Icon';
 import { PrimaryButton } from './PrimaryButton';
+import { ShadowSurface } from './layout/ShadowSurface';
+import { VStack } from './layout/Stack';
 
 export function EmptyStateCard({
   title,
@@ -18,33 +20,30 @@ export function EmptyStateCard({
   onPress?: () => void;
 }) {
   return (
-    <View
-      style={{
-        backgroundColor: colors.white,
-        borderRadius: radii.xl,
-        padding: spacing.xl,
-        alignItems: 'center',
-        gap: spacing.md,
-        ...shadows.card,
-      }}
-    >
-      <View
-        style={{
-          width: 48,
-          height: 48,
-          borderRadius: 18,
-          backgroundColor: colors.background,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Icon name={ctaIcon ?? 'sparkles'} size={22} color={colors.primary} />
-      </View>
-      <View style={{ alignItems: 'center', gap: spacing.xs }}>
-        <Text style={[typography.headline, { textAlign: 'center' }]}>{title}</Text>
-        <Text style={[typography.caption, { textAlign: 'center' }]}>{message}</Text>
-      </View>
-      {ctaLabel && onPress ? <PrimaryButton label={ctaLabel} icon={ctaIcon} onPress={onPress} /> : null}
-    </View>
+    <ShadowSurface shadow="card" borderRadius={radii.xl} innerStyle={{ padding: spacing.xl }}>
+      <VStack gap={spacing.md} align="center">
+        <View
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 18,
+            backgroundColor: colors.background,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Icon name={ctaIcon ?? 'sparkles'} size={22} color={colors.primary} />
+        </View>
+        <VStack gap={spacing.xs} align="center">
+          <Text style={[typography.headline, { textAlign: 'center' }]}>{title}</Text>
+          <Text style={[typography.caption, { textAlign: 'center' }]}>{message}</Text>
+        </VStack>
+        {ctaLabel && onPress ? (
+          <View style={{ width: '100%', marginTop: spacing.lg }}>
+            <PrimaryButton label={ctaLabel} icon={ctaIcon} onPress={onPress} />
+          </View>
+        ) : null}
+      </VStack>
+    </ShadowSurface>
   );
 }

@@ -4,6 +4,7 @@ import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, 
 import { clearCachedUserId, setCachedUserId } from '../lib/auth';
 import { resetAppDataCache } from './appDataBridge';
 import {
+  AuthValidationError,
   listenToAuthChanges,
   refreshAuthSession,
   restoreAuthSession,
@@ -14,7 +15,12 @@ import {
 } from '../services/authService';
 import { ensureProfileExists } from '../services/profileService';
 import { syncPendingInvitationsForCurrentUser } from '../services/invitationService';
-import { CLOCK_SYNC_NOTICE, isJwtTimingError } from '../utils/authErrors';
+import {
+  CLOCK_SYNC_NOTICE,
+  isJwtClockSyncError,
+  isRecoverableAuthSessionError,
+  toUserFriendlyAuthError,
+} from '../utils/authErrors';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
 
@@ -36,7 +42,7 @@ interface AuthContextValue {
     phone?: string;
     avatarUri?: string;
   }) => Promise<void>;
-  signOut: (options?: { local?: boolean; reason?: 'jwt_timing_error' }) => Promise<void>;
+  signOut: (options?: { local?: boolean; reason?: 'recoverable_session_error' }) => Promise<void>;
   refreshSession: () => Promise<Session | null>;
   clearError: () => void;
   clearSessionNotice: () => void;
@@ -45,13 +51,17 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function authMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof Error)) {
-    return fallback;
+  if (err instanceof AuthValidationError) {
+    return err.message;
   }
-  if (err.message.toLowerCase().includes('email not confirmed')) {
-    return 'Email confirmation is still enabled in Supabase. Please disable it in Auth settings or confirm the email before logging in.';
+  if (isRecoverableAuthSessionError(err)) {
+    return 'Your session expired. Please log in again.';
   }
-  return err.message;
+  const friendly = toUserFriendlyAuthError(err);
+  if (friendly !== 'Something went wrong. Please try again.') {
+    return friendly;
+  }
+  return toUserFriendlyError(err, fallback);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -79,12 +89,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const handleInvalidSession = useCallback(async () => {
-    logger.warn('Local sign out due to invalid session', { reason: 'jwt_timing_error' });
-    markJwtTimingFailure();
+  const handleExpiredSession = useCallback(async () => {
+    logger.warn('Local sign out due to invalid session', { reason: 'recoverable_session_error' });
     await signOutLocal();
     applySession(null);
-  }, [applySession, markJwtTimingFailure]);
+    setSessionNotice('Your session expired. Please log in again.');
+  }, [applySession]);
 
   useEffect(() => {
     let mounted = true;
@@ -92,20 +102,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initializeAuth = async () => {
       try {
-        const { session: restoredSession, invalidatedDueToJwt } = await restoreAuthSession();
+        const { session: restoredSession, invalidatedDueToRecoverableError } = await restoreAuthSession();
         if (!mounted) {
           return;
         }
         applySession(restoredSession);
-        if (invalidatedDueToJwt) {
+        if (invalidatedDueToRecoverableError) {
+          setSessionNotice('Your session expired. Please log in again.');
           markJwtTimingFailure();
         }
       } catch (err: unknown) {
         if (!mounted) {
           return;
         }
-        if (isJwtTimingError(err)) {
-          await handleInvalidSession();
+        if (isRecoverableAuthSessionError(err)) {
+          await handleExpiredSession();
         } else {
           logger.error('Restore session failed', err);
           setError(toUserFriendlyError(err, 'Unable to restore session.'));
@@ -128,7 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       unsubscribe?.();
     };
-  }, [applySession, handleInvalidSession, markJwtTimingFailure]);
+  }, [applySession, handleExpiredSession, markJwtTimingFailure]);
 
   const refreshSession = useCallback(async () => {
     try {
@@ -136,18 +147,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       applySession(refreshedSession);
       return refreshedSession;
     } catch (err) {
-      if (isJwtTimingError(err)) {
-        await handleInvalidSession();
+      if (isRecoverableAuthSessionError(err)) {
+        await handleExpiredSession();
+        if (isJwtClockSyncError(err)) {
+          markJwtTimingFailure();
+        }
       }
       throw err;
     }
-  }, [applySession, handleInvalidSession]);
+  }, [applySession, handleExpiredSession, markJwtTimingFailure]);
+
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  const clearSessionNotice = useCallback(() => {
+    setSessionNotice(null);
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     setLoading(true);
     setError(null);
     setSessionNotice(null);
     jwtTimingFailureCount.current = 0;
+    applySession(null);
     try {
       const result = await signInWithEmail(email, password);
       applySession(result.session);
@@ -158,7 +181,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.error('Sync pending invitations after sign in failed', syncError);
       }
     } catch (err) {
-      setError(authMessage(err, 'Unable to log in.'));
+      const message = authMessage(err, 'Unable to log in.');
+      setError(message);
+      applySession(null);
+      logger.warn('Sign in failed', { reason: message });
+      throw new AuthValidationError(message);
     } finally {
       setLoading(false);
     }
@@ -185,16 +212,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logger.error('Sync pending invitations after sign in failed', syncError);
       }
     } catch (err) {
-      setError(authMessage(err, 'Unable to create account.'));
+      const message = authMessage(err, 'Unable to create account.');
+      setError(message);
+      logger.warn('Sign up failed', { reason: message });
+      throw new AuthValidationError(message);
     } finally {
       setLoading(false);
     }
   }, [applySession]);
 
-  const signOut = useCallback(async (options?: { local?: boolean; reason?: 'jwt_timing_error' }) => {
+  const signOut = useCallback(async (options?: { local?: boolean; reason?: 'recoverable_session_error' }) => {
     setLoading(true);
     setError(null);
-    if (options?.reason === 'jwt_timing_error') {
+    if (options?.reason === 'recoverable_session_error') {
       markJwtTimingFailure();
     }
     logger.info('Logout started', { local: Boolean(options?.local) });
@@ -221,17 +251,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       loading,
       authInitialized,
-      isAuthenticated: Boolean(session),
+      isAuthenticated: Boolean(session?.user),
       sessionNotice,
       error,
       signIn,
       signUp,
       signOut,
       refreshSession,
-      clearError: () => setError(null),
-      clearSessionNotice: () => setSessionNotice(null),
+      clearError,
+      clearSessionNotice,
     }),
-    [authInitialized, error, loading, refreshSession, session, sessionNotice, signIn, signOut, signUp],
+    [
+      authInitialized,
+      clearError,
+      clearSessionNotice,
+      error,
+      loading,
+      refreshSession,
+      session,
+      sessionNotice,
+      signIn,
+      signOut,
+      signUp,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -24,6 +24,8 @@ import { ensureProfileExists } from './profileService';
 import { getCurrentUserGroupBalanceSummary } from './settlementService';
 
 const logger = createLogger('groupService');
+const GROUP_INVITATION_LINK_ERROR =
+  'Group could not be created because the invitation link could not be generated. Please try again.';
 
 export function getCurrentUserId(): string {
   return getCachedUserId();
@@ -123,6 +125,9 @@ export async function createGroupWithInvitations(
     invitedCount: input.invitedEmails.length,
   });
 
+  let createdGroupId: string | undefined;
+  let ownerUserId: string | undefined;
+
   try {
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError) {
@@ -132,6 +137,7 @@ export async function createGroupWithInvitations(
     if (!user) {
       throw new Error('You must be logged in to create a group.');
     }
+    ownerUserId = user.id;
 
     const profile = await ensureProfileExists();
     const ownerEmail = profile?.email ?? user.email ?? null;
@@ -160,6 +166,7 @@ export async function createGroupWithInvitations(
       throw groupError;
     }
     const group = mapGroup(groupRow);
+    createdGroupId = group.id;
     logger.info('Group insert succeeded', { table: 'groups', groupId: group.id });
 
     const { data: ownerMemberRow, error: ownerMemberError } = await supabase
@@ -208,16 +215,16 @@ export async function createGroupWithInvitations(
         });
         await sendInvitationEmail(result.invitation.id);
       } catch (error) {
-        logger.error('Invited member creation failed', error, {
-          table: 'group_invitations',
-          groupId: group.id,
-          email: maskEmail(invitedEmail),
-        });
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to invite one or more members.';
-        throw new Error(`Group created, but invitation failed for ${maskEmail(invitedEmail)}: ${message}`);
+        logger.warn(
+          'Invited member creation failed; rolling back created group',
+          {
+            table: 'group_invitations',
+            groupId: group.id,
+            email: maskEmail(invitedEmail),
+          },
+          error,
+        );
+        throw new Error(GROUP_INVITATION_LINK_ERROR);
       }
     }
 
@@ -232,13 +239,37 @@ export async function createGroupWithInvitations(
       invitations,
     };
   } catch (error) {
-    logger.error('Create group with invitations failed', error, {
-      table: 'groups',
-      name: input.name,
-      invitedCount: input.invitedEmails.length,
-    });
+    if (createdGroupId && ownerUserId) {
+      await cleanupCreatedGroup(createdGroupId, ownerUserId);
+    }
+
+    const handledInvitationFailure =
+      error instanceof Error && error.message === GROUP_INVITATION_LINK_ERROR;
+    if (handledInvitationFailure) {
+      logger.warn('Create group with invitations failed after handled invitation error', {
+        table: 'groups',
+        name: input.name,
+        invitedCount: input.invitedEmails.length,
+      });
+    } else {
+      logger.error('Create group with invitations failed', error, {
+        table: 'groups',
+        name: input.name,
+        invitedCount: input.invitedEmails.length,
+      });
+    }
     throw error;
   }
+}
+
+async function cleanupCreatedGroup(groupId: string, ownerId: string): Promise<void> {
+  logger.info('Cleaning up partially created group', { table: 'groups', groupId });
+  const { error } = await supabase.from('groups').delete().eq('id', groupId).eq('owner_id', ownerId);
+  if (error) {
+    logger.error('Partially created group cleanup failed', error, { table: 'groups', groupId });
+    return;
+  }
+  logger.info('Partially created group cleanup succeeded', { table: 'groups', groupId });
 }
 
 export async function updateGroup(groupId: string, input: UpdateGroupInput): Promise<Group> {

@@ -9,6 +9,7 @@ import type { GroupType } from '../types/models';
 import { formatDateForSupabase, isEndDateValid, parseSupabaseDate } from '../utils/date';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import { resolveFinalInviteEmails } from '../utils/inviteEmailSubmit';
 import { invalidateAfterCreateGroup } from '../utils/mutationInvalidation';
 import {
   hasDuplicateEmail,
@@ -103,35 +104,52 @@ export function useCreateGroup() {
       throw new Error(nextDateError);
     }
 
-    for (const email of invitedEmails) {
+    setEmailError(undefined);
+    const resolved = resolveFinalInviteEmails(invitedEmails, emailValue);
+    if (!resolved.ok) {
+      setEmailError(resolved.error);
+      throw new Error(resolved.error);
+    }
+
+    const profile = await ensureProfileExists();
+    const ownerEmail = profile?.email ? normalizeEmail(profile.email) : null;
+    if (ownerEmail && resolved.finalEmails.some((email) => email === ownerEmail)) {
+      setEmailError('Your account is already added as the group owner.');
+      throw new Error('Your account is already added as the group owner.');
+    }
+
+    for (const email of resolved.finalEmails) {
       if (!isValidEmail(email)) {
         throw new Error(`Invalid invited email: ${email}`);
       }
     }
 
     setSubmitting(true);
-    logger.info('Create group submit started', { invitedCount: invitedEmails.length, groupType });
+    logger.info('Create group submit started', { invitedCount: resolved.finalEmails.length, groupType });
     try {
       const result = await createGroupWithInvitations({
         name: trimmedName,
         type: groupType,
         startDate,
         endDate: endDate || null,
-        invitedEmails,
+        invitedEmails: resolved.finalEmails,
       });
       invalidateAfterCreateGroup(invalidate);
       void refreshNotifications();
+      setInvitedEmails([]);
+      setEmailValue('');
+      setEmailError(undefined);
       logger.info('Create group submit succeeded', { groupId: result.group.id });
       return result;
     } catch (error) {
-      logger.error('Create group submit failed', error, { invitedCount: invitedEmails.length });
+      logger.warn('Create group submit failed with handled form error', { invitedCount: resolved.finalEmails.length }, error);
       const message = toUserFriendlyError(error, 'Unable to create group. Please try again.');
       setSubmitError(message);
       throw error;
     } finally {
       setSubmitting(false);
     }
-  }, [endDate, groupType, invitedEmails, invalidate, name, refreshNotifications, startDate, submitting, validateDates]);
+  }, [emailValue, endDate, groupType, invitedEmails, invalidate, name, refreshNotifications, startDate, submitting, validateDates]);
 
   const handleStartDateChange = useCallback(
     (value: string) => {

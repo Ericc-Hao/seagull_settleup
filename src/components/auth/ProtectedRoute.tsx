@@ -5,9 +5,9 @@ import { useAuth } from '../../context/AuthContext';
 import { AuthLoadingScreen } from '../../screens/AuthScreens';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, authInitialized } = useAuth();
 
-  if (loading) {
+  if (!authInitialized) {
     return <AuthLoadingScreen />;
   }
 

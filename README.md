@@ -133,6 +133,81 @@ If `EMAIL_ICON_URL` is missing, the email uses a text logo mark (`SS`). When the
 - In-app UI uses `AppLogo` with the local `assets/icon.png`.
 - User avatars still use `UserAvatar` / profile photos / initials — not the app logo.
 
+### Native app icon and splash (iOS / Android)
+
+Icon and splash are configured in `app.json` to use `assets/icon.png` with background `#EEF1FF`.
+
+After changing icon or splash assets, clear Metro cache:
+
+```bash
+npx expo start -c
+```
+
+If the simulator or device still shows an old icon or splash:
+
+```bash
+npx expo prebuild --clean
+npx expo run:ios
+```
+
+**Expo Go note:** Expo Go may show Expo-related splash behavior. A development build (`npx expo run:ios`) or production build is required to fully verify custom app icon and splash screen on native.
+
+## Authentication setup (Supabase)
+
+Seagull Split uses **Supabase Auth** as the source of truth. Auth users live in `auth.users`; app profile data lives in `public.profiles`. Passwords are never stored in `public.profiles`.
+
+Supported sign-in methods:
+
+- Email / password
+- Forgot password (email recovery link)
+
+### Supabase Dashboard — Redirect URLs
+
+Go to **Authentication → URL Configuration → Redirect URLs** and add:
+
+- `https://split.seagullcoffee.ca/reset-password`
+
+Also set **Site URL** to `https://split.seagullcoffee.ca` for production web.
+
+Add `EXPO_PUBLIC_AUTH_REDIRECT_URL=https://split.seagullcoffee.ca` to your local `.env` (used for password recovery redirects).
+
+### Forgot password flow
+
+1. User requests recovery from `/forgot-password`.
+2. Supabase sends an email with redirect `https://split.seagullcoffee.ca/reset-password`.
+3. `/reset-password` exchanges the recovery code, verifies a session exists, then allows `updateUser({ password })`.
+4. If the link is missing or expired, the UI shows **Link Expired** with options to request a new link.
+
+### Auth testing checklist
+
+**Automated (run locally):**
+
+```bash
+npm run typecheck
+npm run lint
+npm run web:build
+```
+
+**Web manual tests:**
+
+1. Email/password login succeeds
+2. Wrong password shows inline **Invalid email or password.** — stays on login, no redirect to home
+3. Login errors do not appear on Register (and vice versa)
+4. Forgot password sends email; `/reset-password` updates password when the recovery link is valid
+
+**iOS manual tests:**
+
+```bash
+npx expo start -c
+npx expo prebuild --clean && npx expo run:ios
+```
+
+1. Email/password login and wrong-password error behavior match web
+2. Splash/loading and auth screens use `AppLogo` (`assets/icon.png`)
+3. Register screen scrolls; Create Account button and footer link are reachable
+4. Login button stays visible when the keyboard is open
+5. Expired refresh token clears session and shows login with optional notice
+
 ## Web deployment (GitHub Pages)
 
 Production web URL: [https://split.seagullcoffee.ca](https://split.seagullcoffee.ca)
@@ -143,6 +218,7 @@ Add these repository secrets for the web build workflow:
 
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `EXPO_PUBLIC_AUTH_REDIRECT_URL` (e.g. `https://split.seagullcoffee.ca`)
 
 Do not add service role keys, Resend keys, or other private secrets to GitHub Actions for the web app build.
 

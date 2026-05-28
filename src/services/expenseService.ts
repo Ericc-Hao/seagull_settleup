@@ -32,6 +32,8 @@ import {
 import { getCurrentUserId } from './groupService';
 import { createReceipt, getExpenseReceiptView, toExpenseReceiptView } from './receiptService';
 import { getSettleableMembersWithProfiles, getCurrentUserGroupBalanceSummary } from './settlementService';
+import { resolveMemberWithProfile } from './memberService';
+import { isPendingParticipant } from '../utils/groupParticipants';
 import { uploadReceiptImage } from './storageService';
 
 const logger = createLogger('expenseService');
@@ -194,12 +196,17 @@ function getMySplitShareCents(
   return split?.shareAmountCents ?? 0;
 }
 
+export function memberHasExpenseParticipation(memberId: string, db = readDb()): boolean {
+  const asPayer = db.expenses.some((expense) => expense.payerMemberId === memberId);
+  const asSplit = db.expenseSplits.some((split) => split.memberId === memberId);
+  return asPayer || asSplit;
+}
+
 function resolvePayerName(expense: Expense, db = readDb()): string | undefined {
   if (!expense.payerMemberId || !expense.groupId) {
     return undefined;
   }
-  const members = getSettleableMembersWithProfiles(expense.groupId, db);
-  return members.find((member) => member.id === expense.payerMemberId)?.displayName;
+  return resolveMemberWithProfile(expense.payerMemberId, expense.groupId, db)?.displayName;
 }
 
 function toSplitExpenseWithMyShare(
@@ -415,7 +422,10 @@ function buildExpenseDetailView(
     expenseDate: expense.expenseDate,
     splits: splits
       .map((split) => {
-        const member = members.find((entry) => entry.id === split.memberId);
+        const member =
+          resolveMemberWithProfile(split.memberId, expense.groupId!, db) ??
+          members.find((entry) => entry.id === split.memberId);
+        const isPending = member ? isPendingParticipant(member) : false;
         return {
           memberId: split.memberId,
           displayName: member?.displayName ?? 'Member',
@@ -424,6 +434,8 @@ function buildExpenseDetailView(
           shareAmountCents: split.shareAmountCents,
           shareAmountDisplay: formatCAD(split.shareAmountCents),
           isCurrentUser: split.memberId === currentMember?.id,
+          invitationStatus: member?.invitationStatus,
+          isPending,
         };
       })
       .sort((a, b) => a.displayName.localeCompare(b.displayName)),

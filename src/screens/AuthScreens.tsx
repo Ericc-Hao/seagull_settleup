@@ -1,18 +1,32 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from 'react-native';
+import { Children, Fragment, isValidElement, useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type KeyboardTypeOptions,
+  type TextInputProps,
+} from 'react-native';
 
 import { PrimaryButton, AppLogo, ScreenLayout, SecondaryButton } from '../components';
 import { InvitationContextCard } from '../components/invitations/InvitationContextCard';
+import { ShadowSurface } from '../components/layout/ShadowSurface';
 import { useAuth } from '../context/AuthContext';
 import { useInvitationPreview } from '../hooks/useInvitationPreview';
 import { useInviteRouteParam } from '../hooks/useInviteRouteParam';
 import { setPendingInviteToken } from '../lib/pendingInviteToken';
-import { colors, layout, radii, shadows, spacing, typography } from '../theme';
+import { supabase } from '../lib/supabase';
+import { recoverPassword, exchangeRecoveryCodeFromUrl } from '../services/authService';
+import { colors, layout, radii, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
-import { maskEmail, normalizeEmail } from '../utils/validation';
+import { toUserFriendlyAuthError } from '../utils/authErrors';
+import { isValidEmail, maskEmail, normalizeEmail } from '../utils/validation';
 import { safeBack } from '../utils/navigation';
 
 const authUiLogger = createLogger('AuthScreens');
@@ -21,35 +35,92 @@ function authRoute(path: '/login' | '/register', inviteToken?: string) {
   return inviteToken ? { pathname: path, params: { invite: inviteToken } } : path;
 }
 
+function flattenAuthChildren(children: ReactNode): ReactNode[] {
+  const items: ReactNode[] = [];
+
+  Children.forEach(children, (child) => {
+    if (child == null || child === false) {
+      return;
+    }
+
+    if (isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment) {
+      items.push(...flattenAuthChildren(child.props.children));
+      return;
+    }
+
+    items.push(child);
+  });
+
+  return items;
+}
+
+function AuthForm({ children }: { children: ReactNode }) {
+  const items = flattenAuthChildren(children);
+
+  return (
+    <View style={{ width: '100%', alignSelf: 'stretch' }}>
+      {items.map((child, index) => (
+        <View
+          key={index}
+          style={{
+            width: '100%',
+            alignSelf: 'stretch',
+            marginTop: index > 0 ? spacing.md : 0,
+          }}
+        >
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function AuthCard({
   title,
   subtitle,
   children,
+  scroll = true,
+  compact = false,
 }: {
   title: string;
   subtitle: string;
   children: ReactNode;
+  scroll?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <ScreenLayout scroll={false} contentStyle={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
-      <View style={{ alignItems: 'center', gap: spacing.md }}>
-        <AppLogo size={88} />
-        <View style={{ alignItems: 'center', gap: spacing.xs }}>
-          <Text style={[typography.largeTitle, { textAlign: 'center' }]}>{title}</Text>
-          <Text style={[typography.subtitle, { textAlign: 'center' }]}>{subtitle}</Text>
+    <ScreenLayout
+      scroll={scroll}
+      keyboardAvoiding
+      bottomTabPadding={false}
+      scrollBottomPadding={compact ? spacing['3xl'] + 48 : spacing['4xl'] + 48}
+      contentStyle={{
+        flexGrow: 1,
+        alignSelf: 'stretch',
+        ...(compact ? { justifyContent: 'center' } : {}),
+      }}
+    >
+      <View style={{ alignSelf: 'stretch', paddingTop: compact ? spacing.md : spacing.lg }}>
+        <View style={{ alignItems: 'center' }}>
+          <AppLogo size={72} />
+          <View style={{ marginTop: spacing.md, alignItems: 'center', maxWidth: 320 }}>
+            <Text style={[typography.largeTitle, { textAlign: 'center' }]}>{title}</Text>
+            <Text style={[typography.subtitle, { textAlign: 'center', marginTop: spacing.xs }]}>
+              {subtitle}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <View
-        style={{
-          backgroundColor: colors.white,
-          borderRadius: radii['2xl'],
-          padding: layout.cardPadding,
-          gap: spacing.md,
-          ...shadows.card,
-        }}
-      >
-        {children}
+        <View style={{ marginTop: spacing.xl }}>
+          <ShadowSurface
+            shadow="card"
+            borderRadius={radii['2xl']}
+            style={{ alignSelf: 'stretch' }}
+            innerStyle={{ padding: layout.cardPadding }}
+          >
+            <AuthForm>{children}</AuthForm>
+          </ShadowSurface>
+        </View>
       </View>
     </ScreenLayout>
   );
@@ -63,6 +134,10 @@ function AuthInput({
   autoCapitalize = 'none',
   disabled = false,
   helperText,
+  placeholder,
+  keyboardType = 'default',
+  textContentType,
+  autoComplete,
 }: {
   label: string;
   value: string;
@@ -71,32 +146,52 @@ function AuthInput({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   disabled?: boolean;
   helperText?: string;
+  placeholder?: string;
+  keyboardType?: KeyboardTypeOptions;
+  textContentType?: TextInputProps['textContentType'];
+  autoComplete?: TextInputProps['autoComplete'];
 }) {
   return (
     <View
       style={{
-        backgroundColor: disabled ? colors.borderSubtle : colors.background,
+        backgroundColor: disabled ? colors.borderSubtle : colors.white,
         borderRadius: radii.lg,
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
+        paddingVertical: spacing.sm + 4,
         borderWidth: 1,
         borderColor: colors.borderSubtle,
+        minHeight: 76,
         opacity: disabled ? 0.85 : 1,
       }}
     >
-      <Text style={[typography.label, { marginBottom: 4 }]}>{label}</Text>
+      <Text style={[typography.label, { marginBottom: 6 }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
+        spellCheck={false}
+        keyboardType={keyboardType}
+        textContentType={textContentType}
+        autoComplete={autoComplete}
         editable={!disabled}
         selectTextOnFocus={!disabled}
-        style={[typography.body, { padding: 0, color: disabled ? colors.textSecondary : colors.textPrimary }]}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textTertiary}
+        style={[
+          typography.body,
+          {
+            padding: 0,
+            margin: 0,
+            minHeight: 24,
+            color: disabled ? colors.textSecondary : colors.textPrimary,
+            ...(Platform.OS === 'android' ? { textAlignVertical: 'center' as const } : {}),
+          },
+        ]}
       />
       {helperText ? (
-        <Text style={[typography.caption, { color: colors.textTertiary, marginTop: 4 }]}>{helperText}</Text>
+        <Text style={[typography.caption, { color: colors.textTertiary, marginTop: 6 }]}>{helperText}</Text>
       ) : null}
     </View>
   );
@@ -106,7 +201,19 @@ function ErrorText({ message }: { message?: string | null }) {
   if (!message) {
     return null;
   }
-  return <Text style={[typography.caption, { color: colors.danger }]}>{message}</Text>;
+  return (
+    <Text style={[typography.caption, { color: colors.danger, textAlign: 'center', lineHeight: 18 }]}>
+      {message}
+    </Text>
+  );
+}
+
+function screenAuthError(error: unknown): string {
+  const friendly = toUserFriendlyAuthError(error);
+  if (friendly !== 'Something went wrong. Please try again.') {
+    return friendly;
+  }
+  return error instanceof Error ? error.message : friendly;
 }
 
 function NoticeText({ message, onDismiss }: { message: string; onDismiss: () => void }) {
@@ -117,10 +224,9 @@ function NoticeText({ message, onDismiss }: { message: string; onDismiss: () => 
         backgroundColor: colors.borderSubtle,
         borderRadius: radii.lg,
         padding: spacing.md,
-        gap: spacing.xs,
       }}
     >
-      <Text style={[typography.caption, { color: colors.textSecondary }]}>{message}</Text>
+      <Text style={[typography.caption, { color: colors.textSecondary, lineHeight: 18 }]}>{message}</Text>
     </Pressable>
   );
 }
@@ -153,14 +259,7 @@ function AvatarPicker({
   };
 
   return (
-    <Pressable
-      onPress={() => void pickAvatar()}
-      style={{
-        alignItems: 'center',
-        gap: spacing.sm,
-        paddingVertical: spacing.sm,
-      }}
-    >
+    <Pressable onPress={() => void pickAvatar()} style={{ alignItems: 'center', paddingVertical: spacing.sm }}>
       <View
         style={{
           width: 80,
@@ -175,14 +274,14 @@ function AvatarPicker({
         }}
       >
         {uri ? (
-          <Image source={{ uri }} style={{ width: '100%', height: '100%' }} />
+          <Image source={{ uri }} style={{ width: 80, height: 80 }} />
         ) : (
           <Text style={[typography.amountSm, { color: colors.primary }]}>
             {(displayName.trim() || 'S').charAt(0).toUpperCase()}
           </Text>
         )}
       </View>
-      <Text style={[typography.caption, { fontWeight: '600', color: colors.primary }]}>
+      <Text style={[typography.caption, { fontWeight: '600', color: colors.primary, marginTop: spacing.sm }]}>
         {uri ? 'Change Avatar' : 'Add Avatar'}
       </Text>
     </Pressable>
@@ -192,19 +291,35 @@ function AvatarPicker({
 function AuthLink({ text, action, onPress }: { text: string; action: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={{ alignItems: 'center', paddingVertical: spacing.xs }}>
-      <Text style={typography.caption}>
+      <Text style={[typography.caption, { textAlign: 'center' }]}>
         {text} <Text style={{ color: colors.primary, fontWeight: '700' }}>{action}</Text>
       </Text>
     </Pressable>
   );
 }
 
+function ForgotPasswordLink({ onPress }: { onPress: () => void }) {
+  return (
+    <View style={{ alignItems: 'flex-end' }}>
+      <Pressable onPress={onPress} hitSlop={8} style={{ paddingVertical: spacing.xs }}>
+        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>
+          Forgot password?
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function AuthLoadingScreen() {
   return (
     <ScreenLayout scroll={false} contentStyle={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <AppLogo size={88} />
-      <ActivityIndicator color={colors.primary} />
-      <Text style={typography.caption}>Checking your session...</Text>
+      <AppLogo size={72} />
+      <View style={{ marginTop: spacing.md }}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+      <Text style={[typography.caption, { marginTop: spacing.sm, color: colors.textSecondary }]}>
+        Checking your session...
+      </Text>
     </ScreenLayout>
   );
 }
@@ -213,7 +328,7 @@ export function WelcomeScreen() {
   const { sessionNotice, clearSessionNotice } = useAuth();
 
   return (
-    <AuthCard title="Seagull Split" subtitle="Track spending. Split bills. Settle in CAD.">
+    <AuthCard title="Seagull Split" subtitle="Track spending. Split bills. Settle in CAD." compact>
       {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
       <PrimaryButton label="Create Account" onPress={() => router.push('/(auth)/register')} />
       <SecondaryButton label="Log In" variant="filled" onPress={() => router.push('/(auth)/login')} />
@@ -222,13 +337,27 @@ export function WelcomeScreen() {
 }
 
 export function LoginScreen() {
-  const { signIn, error, clearError, loading, sessionNotice, clearSessionNotice } = useAuth();
+  const { signIn, clearError, loading, sessionNotice, clearSessionNotice } = useAuth();
   const inviteToken = useInviteRouteParam();
   const { preview, loading: previewLoading, fetchFailed, isPendingInvite } = useInvitationPreview(inviteToken);
   const [email, setEmail] = useState('');
   const [emailLocked, setEmailLocked] = useState(false);
   const [password, setPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      clearError();
+      setValidation(null);
+      setLocalError(null);
+      return () => {
+        clearError();
+        setValidation(null);
+        setLocalError(null);
+      };
+    }, [clearError]),
+  );
 
   useEffect(() => {
     authUiLogger.info('Login screen invite token detected', {
@@ -259,6 +388,7 @@ export function LoginScreen() {
 
   const submit = async () => {
     clearError();
+    setLocalError(null);
     const loginEmail = emailLocked && preview?.invitedEmail ? preview.invitedEmail : email.trim();
 
     if (!loginEmail) {
@@ -279,11 +409,24 @@ export function LoginScreen() {
     }
     setValidation(null);
     authUiLogger.info('Login submit started', { email: maskEmail(loginEmail) });
-    await signIn(loginEmail, password);
+    try {
+      await signIn(loginEmail, password);
+    } catch (error) {
+      setLocalError(screenAuthError(error));
+    }
+  };
+
+  const goToForgotPassword = () => {
+    const currentEmail = email.trim();
+    router.push(
+      currentEmail
+        ? { pathname: '/(auth)/forgot-password', params: { email: currentEmail } }
+        : '/(auth)/forgot-password',
+    );
   };
 
   return (
-    <AuthCard title="Welcome Back" subtitle="Log in to your Seagull Split account.">
+    <AuthCard title="Welcome Back" subtitle="Log in to your Seagull Split account." compact>
       <InvitationContextCard
         inviteToken={inviteToken}
         preview={preview}
@@ -296,11 +439,24 @@ export function LoginScreen() {
         value={email}
         onChangeText={setEmail}
         disabled={emailLocked}
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        textContentType="username"
+        autoComplete="email"
         helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
       />
-      <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+      <AuthInput
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        placeholder="Enter your password"
+        textContentType="password"
+        autoComplete="current-password"
+      />
+      <ForgotPasswordLink onPress={goToForgotPassword} />
       {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
-      <ErrorText message={validation ?? error} />
+      <ErrorText message={validation ?? localError} />
       <PrimaryButton
         label={loading ? 'Logging In...' : 'Log In'}
         onPress={() => void submit()}
@@ -316,7 +472,7 @@ export function LoginScreen() {
 }
 
 export function RegisterScreen() {
-  const { signUp, error, clearError, loading } = useAuth();
+  const { signUp, clearError, loading } = useAuth();
   const inviteToken = useInviteRouteParam();
   const { preview, loading: previewLoading, fetchFailed, isPendingInvite } = useInvitationPreview(inviteToken);
   const [displayName, setDisplayName] = useState('');
@@ -327,6 +483,20 @@ export function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      clearError();
+      setValidation(null);
+      setLocalError(null);
+      return () => {
+        clearError();
+        setValidation(null);
+        setLocalError(null);
+      };
+    }, [clearError]),
+  );
 
   useEffect(() => {
     authUiLogger.info('Register invite token detected', {
@@ -357,8 +527,18 @@ export function RegisterScreen() {
 
   const showExistingAccountPrompt = Boolean(isPendingInvite && preview?.inviteeHasAccount);
 
+  useEffect(() => {
+    authUiLogger.info('Register auth render state', {
+      showExistingAccountPrompt,
+      loading,
+      previewLoading,
+      hasInviteToken: Boolean(inviteToken),
+    });
+  }, [showExistingAccountPrompt, loading, previewLoading, inviteToken]);
+
   const submit = async () => {
     clearError();
+    setLocalError(null);
     const registrationEmail = emailLocked && preview?.invitedEmail ? preview.invitedEmail : email.trim();
 
     if (!displayName.trim()) {
@@ -385,17 +565,21 @@ export function RegisterScreen() {
       authUiLogger.info('Register submit started', { email: maskEmail(registrationEmail) });
     }
 
-    await signUp({
-      email: registrationEmail,
-      password,
-      displayName,
-      phone: phone.trim() || undefined,
-      avatarUri,
-    });
+    try {
+      await signUp({
+        email: registrationEmail,
+        password,
+        displayName,
+        phone: phone.trim() || undefined,
+        avatarUri,
+      });
+    } catch (error) {
+      setLocalError(screenAuthError(error));
+    }
   };
 
   return (
-    <AuthCard title="Create Account" subtitle="Start tracking and splitting in CAD.">
+    <AuthCard title="Create Account" subtitle="Start tracking and splitting in CAD." scroll>
       <InvitationContextCard
         inviteToken={inviteToken}
         preview={preview}
@@ -409,18 +593,14 @@ export function RegisterScreen() {
             backgroundColor: colors.background,
             borderRadius: radii.lg,
             padding: layout.cardPadding,
-            gap: spacing.sm,
             borderWidth: 1,
             borderColor: colors.borderSubtle,
           }}
         >
-          <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>
+          <Text style={[typography.bodyMedium, { color: colors.textPrimary, marginBottom: spacing.sm }]}>
             An account already exists for this email. Please log in to accept the invitation.
           </Text>
-          <PrimaryButton
-            label="Log In"
-            onPress={() => router.push(authRoute('/login', inviteToken))}
-          />
+          <PrimaryButton label="Log In" onPress={() => router.push(authRoute('/login', inviteToken))} />
         </View>
       ) : (
         <>
@@ -431,17 +611,30 @@ export function RegisterScreen() {
             value={email}
             onChangeText={setEmail}
             disabled={emailLocked}
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            textContentType="username"
+            autoComplete="email"
             helperText={emailLocked ? 'This email is linked to your invitation.' : undefined}
           />
-          <AuthInput label="Phone (optional)" value={phone} onChangeText={setPhone} />
-          <AuthInput label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+          <AuthInput label="Phone (optional)" value={phone} onChangeText={setPhone} placeholder="Optional" />
+          <AuthInput
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            textContentType="newPassword"
+            autoComplete="new-password"
+          />
           <AuthInput
             label="Confirm Password"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
+            textContentType="newPassword"
+            autoComplete="new-password"
           />
-          <ErrorText message={validation ?? error} />
+          <ErrorText message={validation ?? localError} />
           <PrimaryButton
             label={loading ? 'Creating Account...' : 'Create Account'}
             onPress={() => void submit()}
@@ -459,9 +652,187 @@ export function RegisterScreen() {
 }
 
 export function ForgotPasswordScreen() {
+  const params = useLocalSearchParams<{ email?: string }>();
+  const prefilledEmail = typeof params.email === 'string' ? params.email : '';
+  const [email, setEmail] = useState(prefilledEmail);
+  const [validation, setValidation] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const submit = async () => {
+    setValidation(null);
+    const trimmed = email.trim();
+    if (!isValidEmail(trimmed)) {
+      setValidation('Please enter a valid email address.');
+      return;
+    }
+    setSubmitting(true);
+    authUiLogger.info('Password recovery submit started', { email: maskEmail(trimmed) });
+    try {
+      // recoverPassword never reveals whether the email exists.
+      await recoverPassword(trimmed);
+      setSent(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <AuthCard title="Check Your Inbox" subtitle="Password recovery is on its way." compact>
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
+          Password recovery email sent. Please check your inbox.
+        </Text>
+        <SecondaryButton label="Back to Log In" variant="filled" onPress={() => safeBack('/(auth)/login')} />
+      </AuthCard>
+    );
+  }
+
   return (
-    <AuthCard title="Reset Password" subtitle="Password reset will be added soon.">
-      <SecondaryButton label="Back to Log In" variant="filled" onPress={() => safeBack('/(auth)/login')} />
+    <AuthCard title="Reset Password" subtitle="Enter your email to receive a recovery link." compact>
+      <AuthInput
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        textContentType="username"
+        autoComplete="email"
+      />
+      <ErrorText message={validation} />
+      <PrimaryButton
+        label={submitting ? 'Sending...' : 'Send Recovery Email'}
+        onPress={() => void submit()}
+        disabled={submitting}
+      />
+      <SecondaryButton label="Back to Log In" variant="outline" onPress={() => safeBack('/(auth)/login')} />
+    </AuthCard>
+  );
+}
+
+export function ResetPasswordScreen() {
+  const { refreshSession, authInitialized, session } = useAuth();
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [validation, setValidation] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [hasRecoverySession, setHasRecoverySession] = useState(false);
+
+  // Web: exchange the PKCE recovery code from the email link, then verify a
+  // session exists before showing the password form.
+  useEffect(() => {
+    if (!authInitialized) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        if (Platform.OS === 'web') {
+          await exchangeRecoveryCodeFromUrl();
+        }
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          authUiLogger.warn('Reset password session check failed', {
+            reason: toUserFriendlyAuthError(error),
+          });
+          setHasRecoverySession(false);
+        } else {
+          setHasRecoverySession(Boolean(data.session));
+        }
+      } catch (error) {
+        authUiLogger.warn('Reset password recovery link invalid', {
+          reason: toUserFriendlyAuthError(error),
+        });
+        setHasRecoverySession(false);
+      } finally {
+        setSessionChecked(true);
+      }
+    })();
+  }, [authInitialized]);
+
+  const submit = async () => {
+    setValidation(null);
+    if (password.length < 6) {
+      setValidation('Password should be at least 6 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setValidation('Password and confirm password must match.');
+      return;
+    }
+    setSubmitting(true);
+    authUiLogger.info('Reset password submit started');
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        setValidation(screenAuthError(error));
+        return;
+      }
+      await refreshSession();
+      setDone(true);
+    } catch (error) {
+      setValidation(screenAuthError(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!authInitialized || !sessionChecked) {
+    return <AuthLoadingScreen />;
+  }
+
+  if (done) {
+    return (
+      <AuthCard title="Password Updated" subtitle="You're all set." compact>
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
+          Your password has been updated. You can now log in with your new password.
+        </Text>
+        <PrimaryButton label="Go to Log In" onPress={() => router.replace('/(auth)/login')} />
+      </AuthCard>
+    );
+  }
+
+  if (!hasRecoverySession && !session) {
+    return (
+      <AuthCard title="Link Expired" subtitle="This recovery link is no longer valid." compact>
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
+          Open the reset link from your email, or request a new recovery email.
+        </Text>
+        <PrimaryButton
+          label="Request New Link"
+          onPress={() => router.replace('/(auth)/forgot-password')}
+        />
+        <SecondaryButton label="Back to Log In" variant="outline" onPress={() => router.replace('/(auth)/login')} />
+      </AuthCard>
+    );
+  }
+
+  return (
+    <AuthCard title="Set New Password" subtitle="Choose a new password for your account." compact>
+      <AuthInput
+        label="New Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        textContentType="newPassword"
+        autoComplete="new-password"
+      />
+      <AuthInput
+        label="Confirm Password"
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
+        secureTextEntry
+        textContentType="newPassword"
+        autoComplete="new-password"
+      />
+      <ErrorText message={validation} />
+      <PrimaryButton
+        label={submitting ? 'Updating...' : 'Update Password'}
+        onPress={() => void submit()}
+        disabled={submitting}
+      />
     </AuthCard>
   );
 }

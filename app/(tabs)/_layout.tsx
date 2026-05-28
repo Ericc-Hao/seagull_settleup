@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { BottomTabBar } from '../../src/components';
 import { ProtectedRoute } from '../../src/components/auth/ProtectedRoute';
-import { colors } from '../../src/theme';
+import { colors, layout } from '../../src/theme';
 
 export default function TabsLayout() {
   return (
@@ -13,12 +13,20 @@ export default function TabsLayout() {
           tabBar={(props) => <BottomTabBar {...props} />}
           screenOptions={{
             headerShown: false,
+            sceneStyle: {
+              flex: 1,
+              backgroundColor: colors.background,
+            },
             tabBarStyle: {
               position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
               backgroundColor: 'transparent',
               borderTopWidth: 0,
-              elevation: 0,
-              height: 0,
+              height: layout.bottomTabHeight + layout.tabBarPlusOverflow,
+              zIndex: 9999,
+              elevation: 9999,
             },
           }}
         >

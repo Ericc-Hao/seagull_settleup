@@ -3,7 +3,7 @@ import { Image, ImageStyle, StyleProp } from 'react-native';
 import appIcon from '../../../assets/icon.png';
 
 export function AppLogo({
-  size = 48,
+  size = 72,
   rounded = true,
   style,
 }: {
@@ -14,6 +14,7 @@ export function AppLogo({
   return (
     <Image
       source={appIcon}
+      resizeMode="cover"
       style={[
         {
           width: size,
@@ -22,7 +23,6 @@ export function AppLogo({
         },
         style,
       ]}
-      resizeMode="cover"
       accessibilityLabel="Seagull Split"
     />
   );

@@ -2,6 +2,8 @@ import type { IconName } from '../components/Icon';
 import type { Expense } from './models';
 import type { GroupType, SettlementMode } from './models';
 
+export type { GroupParticipant, GroupParticipantStatus } from '../utils/groupParticipants';
+
 export interface PendingInvitationView {
   id: string;
   groupId: string;
@@ -144,6 +146,8 @@ export interface ExpenseSplitMemberView {
   shareAmountCents: number;
   shareAmountDisplay: string;
   isCurrentUser: boolean;
+  invitationStatus?: GroupMemberWithProfile['invitationStatus'];
+  isPending?: boolean;
 }
 
 export interface ExpenseDetailView {

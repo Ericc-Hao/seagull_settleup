@@ -3,21 +3,23 @@ import { TextStyle, ViewStyle } from 'react-native';
 import { colors } from './colors';
 import { radii } from './radii';
 import { spacing } from './spacing';
-import { typography } from './typography';
 
 const baseContainer: ViewStyle = {
   flexDirection: 'row',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: spacing.sm,
+  minHeight: 52,
+  minWidth: 0,
   borderRadius: radii.lg,
   paddingVertical: spacing.lg - 2,
-  paddingHorizontal: spacing.xl,
+  paddingHorizontal: spacing.lg,
 };
 
 const baseLabel: TextStyle = {
-  ...typography.bodyMedium,
-  fontWeight: '600',
+  fontSize: 15,
+  fontWeight: '700',
+  lineHeight: 20,
+  textAlign: 'center',
 };
 
 /** Shared button style presets */
@@ -26,27 +28,29 @@ export const buttons = {
     container: {
       ...baseContainer,
       backgroundColor: colors.primary,
+      alignSelf: 'stretch',
     } satisfies ViewStyle,
     label: {
       ...baseLabel,
       color: colors.white,
     } satisfies TextStyle,
     iconColor: colors.white,
-    pressedOpacity: 0.88,
-    disabledOpacity: 0.5,
+    pressedOpacity: 0.85,
+    disabledOpacity: 0.55,
   },
   secondary: {
     container: {
       ...baseContainer,
       backgroundColor: colors.secondary,
+      alignSelf: 'stretch',
     } satisfies ViewStyle,
     label: {
       ...baseLabel,
       color: colors.white,
     } satisfies TextStyle,
     iconColor: colors.white,
-    pressedOpacity: 0.88,
-    disabledOpacity: 0.5,
+    pressedOpacity: 0.85,
+    disabledOpacity: 0.55,
   },
   outline: {
     container: {

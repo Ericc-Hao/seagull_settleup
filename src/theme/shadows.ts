@@ -14,10 +14,10 @@ export const shadows = {
     elevation: 2,
   }),
   card: createShadowStyle({
-    color: '#7B82F5',
-    offset: { width: 0, height: 4 },
-    opacity: 0.08,
-    radius: 14,
+    color: '#5A64B4',
+    offset: { width: 0, height: 8 },
+    opacity: 0.12,
+    radius: 18,
     elevation: 3,
   }),
   elevated: createShadowStyle({

@@ -5,6 +5,7 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import '../global.css';
+import { installExpectedAuthErrorHandlers } from '../src/lib/expectedAuthErrors';
 import { InviteTokenHandler } from '../src/components/invitations/InviteTokenHandler';
 import { colors } from '../src/theme';
 import { AppDataProvider } from '../src/context/AppDataContext';
@@ -52,6 +53,8 @@ function AuthenticatedShell({ children }: { children: ReactNode }) {
 }
 
 export default function RootLayout() {
+  installExpectedAuthErrorHandlers();
+
   return (
     <SafeAreaProvider style={styles.root}>
       <View style={styles.root}>
@@ -66,9 +69,9 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { loading, authInitialized } = useAuth();
+  const { authInitialized } = useAuth();
 
-  if (loading || !authInitialized) {
+  if (!authInitialized) {
     return <AuthLoadingScreen />;
   }
 
@@ -77,6 +80,7 @@ function RootNavigator() {
       <Stack screenOptions={stackScreenOptions}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="reset-password" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="create-group" options={modalStackScreenOptions} />

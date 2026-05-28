@@ -29,6 +29,7 @@ import {
   readDb,
 } from './dbHelpers';
 import { getCachedUserId } from '../lib/auth';
+import { isBalanceEligibleMember } from '../utils/groupParticipants';
 import { SETTLEMENT_COLUMNS, SETTLEMENT_LIST_LIMIT } from '../lib/queryColumns';
 
 function getCurrentUserId(): string {
@@ -101,19 +102,7 @@ export async function getSettlements(groupId?: string): Promise<Settlement[]> {
 }
 
 export function getSettleableMembers(groupId: string, db = readDb()): GroupMember[] {
-  return getGroupMembers(groupId, db).filter((member) => {
-    if (member.isActive === false) {
-      return false;
-    }
-    if (
-      member.invitationStatus === 'pending' ||
-      member.invitationStatus === 'declined' ||
-      member.invitationStatus === 'removed'
-    ) {
-      return false;
-    }
-    return true;
-  });
+  return getGroupMembers(groupId, db).filter((member) => isBalanceEligibleMember(member));
 }
 
 export function getSettleableMembersWithProfiles(groupId: string, db = readDb()): GroupMemberWithProfile[] {

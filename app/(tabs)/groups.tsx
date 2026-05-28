@@ -17,12 +17,20 @@ import { useGroupsData } from '../../src/hooks/useGroupsData';
 import { useStaleFocusRefresh } from '../../src/hooks/useStaleFocusRefresh';
 import { useInvitationActions } from '../../src/hooks/useInvitationActions';
 import { invalidateAfterAcceptInvitation, invalidateAfterDeclineInvitation } from '../../src/utils/mutationInvalidation';
+import { createLogger } from '../../src/utils/logger';
 import { layout } from '../../src/theme';
+
+const logger = createLogger('GroupsTabScreen');
 
 export default function GroupsTabScreen() {
   const data = useGroupsData();
   const { unreadCount } = useNotifications();
   const { invalidate, refreshNotifications } = useAppData();
+
+  const handleCreateGroupPress = useCallback(() => {
+    logger.info('Groups header create group pressed');
+    router.push('/create-group');
+  }, []);
 
   const onAcceptComplete = useCallback(async () => {
     invalidateAfterAcceptInvitation(invalidate);
@@ -49,6 +57,7 @@ export default function GroupsTabScreen() {
           subtitle={data.subtitle}
           unreadCount={unreadCount}
           onNotificationPress={() => router.push('/notifications')}
+          onCreateGroupPress={handleCreateGroupPress}
         />
       }
     >

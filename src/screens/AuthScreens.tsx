@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import type { ReactNode } from 'react';
 import { Children, Fragment, isValidElement, useCallback, useEffect, useState } from 'react';
@@ -21,10 +21,12 @@ import { useAuth } from '../context/AuthContext';
 import { useInvitationPreview } from '../hooks/useInvitationPreview';
 import { useInviteRouteParam } from '../hooks/useInviteRouteParam';
 import { setPendingInviteToken } from '../lib/pendingInviteToken';
+import { supabase } from '../lib/supabase';
+import { recoverPassword, exchangeRecoveryCodeFromUrl } from '../services/authService';
 import { colors, layout, radii, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
 import { toUserFriendlyAuthError } from '../utils/authErrors';
-import { maskEmail, normalizeEmail } from '../utils/validation';
+import { isValidEmail, maskEmail, normalizeEmail } from '../utils/validation';
 import { safeBack } from '../utils/navigation';
 
 const authUiLogger = createLogger('AuthScreens');
@@ -296,6 +298,18 @@ function AuthLink({ text, action, onPress }: { text: string; action: string; onP
   );
 }
 
+function ForgotPasswordLink({ onPress }: { onPress: () => void }) {
+  return (
+    <View style={{ alignItems: 'flex-end' }}>
+      <Pressable onPress={onPress} hitSlop={8} style={{ paddingVertical: spacing.xs }}>
+        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>
+          Forgot password?
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export function AuthLoadingScreen() {
   return (
     <ScreenLayout scroll={false} contentStyle={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -402,6 +416,15 @@ export function LoginScreen() {
     }
   };
 
+  const goToForgotPassword = () => {
+    const currentEmail = email.trim();
+    router.push(
+      currentEmail
+        ? { pathname: '/(auth)/forgot-password', params: { email: currentEmail } }
+        : '/(auth)/forgot-password',
+    );
+  };
+
   return (
     <AuthCard title="Welcome Back" subtitle="Log in to your Seagull Split account." compact>
       <InvitationContextCard
@@ -431,6 +454,7 @@ export function LoginScreen() {
         textContentType="password"
         autoComplete="current-password"
       />
+      <ForgotPasswordLink onPress={goToForgotPassword} />
       {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
       <ErrorText message={validation ?? localError} />
       <PrimaryButton
@@ -628,9 +652,187 @@ export function RegisterScreen() {
 }
 
 export function ForgotPasswordScreen() {
+  const params = useLocalSearchParams<{ email?: string }>();
+  const prefilledEmail = typeof params.email === 'string' ? params.email : '';
+  const [email, setEmail] = useState(prefilledEmail);
+  const [validation, setValidation] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const submit = async () => {
+    setValidation(null);
+    const trimmed = email.trim();
+    if (!isValidEmail(trimmed)) {
+      setValidation('Please enter a valid email address.');
+      return;
+    }
+    setSubmitting(true);
+    authUiLogger.info('Password recovery submit started', { email: maskEmail(trimmed) });
+    try {
+      // recoverPassword never reveals whether the email exists.
+      await recoverPassword(trimmed);
+      setSent(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <AuthCard title="Check Your Inbox" subtitle="Password recovery is on its way." compact>
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
+          Password recovery email sent. Please check your inbox.
+        </Text>
+        <SecondaryButton label="Back to Log In" variant="filled" onPress={() => safeBack('/(auth)/login')} />
+      </AuthCard>
+    );
+  }
+
   return (
-    <AuthCard title="Reset Password" subtitle="Password reset will be added soon." compact>
-      <SecondaryButton label="Back to Log In" variant="filled" onPress={() => safeBack('/(auth)/login')} />
+    <AuthCard title="Reset Password" subtitle="Enter your email to receive a recovery link." compact>
+      <AuthInput
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com"
+        keyboardType="email-address"
+        textContentType="username"
+        autoComplete="email"
+      />
+      <ErrorText message={validation} />
+      <PrimaryButton
+        label={submitting ? 'Sending...' : 'Send Recovery Email'}
+        onPress={() => void submit()}
+        disabled={submitting}
+      />
+      <SecondaryButton label="Back to Log In" variant="outline" onPress={() => safeBack('/(auth)/login')} />
+    </AuthCard>
+  );
+}
+
+export function ResetPasswordScreen() {
+  const { refreshSession, authInitialized, session } = useAuth();
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [validation, setValidation] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [hasRecoverySession, setHasRecoverySession] = useState(false);
+
+  // Web: exchange the PKCE recovery code from the email link, then verify a
+  // session exists before showing the password form.
+  useEffect(() => {
+    if (!authInitialized) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        if (Platform.OS === 'web') {
+          await exchangeRecoveryCodeFromUrl();
+        }
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          authUiLogger.warn('Reset password session check failed', {
+            reason: toUserFriendlyAuthError(error),
+          });
+          setHasRecoverySession(false);
+        } else {
+          setHasRecoverySession(Boolean(data.session));
+        }
+      } catch (error) {
+        authUiLogger.warn('Reset password recovery link invalid', {
+          reason: toUserFriendlyAuthError(error),
+        });
+        setHasRecoverySession(false);
+      } finally {
+        setSessionChecked(true);
+      }
+    })();
+  }, [authInitialized]);
+
+  const submit = async () => {
+    setValidation(null);
+    if (password.length < 6) {
+      setValidation('Password should be at least 6 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setValidation('Password and confirm password must match.');
+      return;
+    }
+    setSubmitting(true);
+    authUiLogger.info('Reset password submit started');
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        setValidation(screenAuthError(error));
+        return;
+      }
+      await refreshSession();
+      setDone(true);
+    } catch (error) {
+      setValidation(screenAuthError(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!authInitialized || !sessionChecked) {
+    return <AuthLoadingScreen />;
+  }
+
+  if (done) {
+    return (
+      <AuthCard title="Password Updated" subtitle="You're all set." compact>
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
+          Your password has been updated. You can now log in with your new password.
+        </Text>
+        <PrimaryButton label="Go to Log In" onPress={() => router.replace('/(auth)/login')} />
+      </AuthCard>
+    );
+  }
+
+  if (!hasRecoverySession && !session) {
+    return (
+      <AuthCard title="Link Expired" subtitle="This recovery link is no longer valid." compact>
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
+          Open the reset link from your email, or request a new recovery email.
+        </Text>
+        <PrimaryButton
+          label="Request New Link"
+          onPress={() => router.replace('/(auth)/forgot-password')}
+        />
+        <SecondaryButton label="Back to Log In" variant="outline" onPress={() => router.replace('/(auth)/login')} />
+      </AuthCard>
+    );
+  }
+
+  return (
+    <AuthCard title="Set New Password" subtitle="Choose a new password for your account." compact>
+      <AuthInput
+        label="New Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        textContentType="newPassword"
+        autoComplete="new-password"
+      />
+      <AuthInput
+        label="Confirm Password"
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
+        secureTextEntry
+        textContentType="newPassword"
+        autoComplete="new-password"
+      />
+      <ErrorText message={validation} />
+      <PrimaryButton
+        label={submitting ? 'Updating...' : 'Update Password'}
+        onPress={() => void submit()}
+        disabled={submitting}
+      />
     </AuthCard>
   );
 }

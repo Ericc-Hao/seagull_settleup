@@ -199,8 +199,14 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
                   displayName={split.displayName}
                   initials={split.avatarLabel}
                   size={36}
+                  status={split.isPending ? 'pending' : undefined}
                 />
-                <Text style={[typography.bodyMedium, { flex: 1 }]}>{split.displayName}</Text>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={typography.bodyMedium}>{split.displayName}</Text>
+                  {split.isPending ? (
+                    <Text style={[typography.caption, { color: '#F59E0B' }]}>Pending</Text>
+                  ) : null}
+                </View>
                 <Text style={typography.bodyMedium}>{split.shareAmountDisplay}</Text>
               </View>
             ))}

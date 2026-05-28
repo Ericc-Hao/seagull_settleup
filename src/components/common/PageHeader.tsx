@@ -2,23 +2,9 @@ import { type ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
 import { layout, typography } from '../../theme';
-import { NotificationBell } from '../notifications/NotificationBell';
+import { HeaderRightActionSlot } from './HeaderRightActionSlot';
+import { NotificationHeaderButton } from './NotificationHeaderButton';
 import { headerLayout } from './headerLayout';
-
-function RightActionSlot({ children }: { children: ReactNode }) {
-  return (
-    <View
-      style={{
-        width: headerLayout.rightActionSize,
-        height: headerLayout.rightActionSize,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      {children}
-    </View>
-  );
-}
 
 export function PageHeader({
   title,
@@ -40,7 +26,7 @@ export function PageHeader({
   const resolvedRight =
     rightAction ??
     (showNotificationBell ? (
-      <NotificationBell unreadCount={notificationUnreadCount} onPress={onPressNotification} />
+      <NotificationHeaderButton unreadCount={notificationUnreadCount} onPress={onPressNotification} />
     ) : (
       <View style={{ width: headerLayout.rightActionSize, height: headerLayout.rightActionSize }} />
     ));
@@ -73,7 +59,7 @@ export function PageHeader({
           ) : null}
         </View>
 
-        <RightActionSlot>{resolvedRight}</RightActionSlot>
+        <HeaderRightActionSlot wide={Boolean(rightAction)}>{resolvedRight}</HeaderRightActionSlot>
       </View>
     </View>
   );

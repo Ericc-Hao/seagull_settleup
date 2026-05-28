@@ -341,6 +341,14 @@ async function getGroupEmailOccupancy(groupId: string): Promise<{
   );
 }
 
+export async function hasDuplicateInviteEmailInGroup(groupId: string, emails: string[]): Promise<boolean> {
+  if (emails.length === 0) {
+    return false;
+  }
+  const occupancy = await getGroupEmailOccupancy(groupId);
+  return emails.some((email) => classifyInviteDuplicate(email, occupancy) !== null);
+}
+
 async function findReusableMemberRow(groupId: string, invitedEmail: string) {
   const { data, error } = await supabase
     .from('group_members')

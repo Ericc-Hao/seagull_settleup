@@ -44,6 +44,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "lint": "npm run typecheck && npm run test",
     "upload:email-icon": "npx tsx scripts/upload-email-icon.ts"
   },
   "private": true,

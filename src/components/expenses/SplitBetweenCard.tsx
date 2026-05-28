@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { GroupMemberWithProfile } from '../../types/views';
+import { filterSplitSelectableMembers } from '../../utils/groupParticipants';
 import { colors, layout, radii, shadows, spacing, typography } from '../../theme';
 import { Icon } from '../Icon';
 import { UserAvatar, memberAvatarStatus } from '../common/UserAvatar';
@@ -14,18 +15,16 @@ export function SplitBetweenCard({
   selectedMemberIds: string[];
   onPress: () => void;
 }) {
-  const activeMembers = members.filter(
-    (m) => m.role === 'owner' || (m.invitationStatus === 'active' && m.isActive !== false),
-  );
+  const selectableMembers = filterSplitSelectableMembers(members);
   const selectedMembers = members.filter((m) => selectedMemberIds.includes(m.id));
-  const allActiveSelected =
-    activeMembers.length > 0 && activeMembers.every((m) => selectedMemberIds.includes(m.id));
+  const allSelectableSelected =
+    selectableMembers.length > 0 && selectableMembers.every((m) => selectedMemberIds.includes(m.id));
   const summary =
     selectedMemberIds.length === 0
       ? 'No members selected'
-      : allActiveSelected && selectedMemberIds.length === activeMembers.length
+      : allSelectableSelected && selectedMemberIds.length === selectableMembers.length
         ? 'All members selected'
-        : `${selectedMemberIds.length} of ${members.length} members selected`;
+        : `${selectedMemberIds.length} of ${selectableMembers.length} members selected`;
 
   return (
     <Pressable

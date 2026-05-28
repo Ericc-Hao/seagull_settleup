@@ -2,6 +2,7 @@ import type { Session, User } from '@supabase/supabase-js';
 
 import { clearCachedUserId, setCachedUserId } from '../lib/auth';
 import { resetAppDataCache } from '../context/appDataBridge';
+import { getPasswordResetRedirectUrl } from '../lib/authRedirect';
 import { clearSupabaseAuthStorage } from '../lib/authStorage';
 import { supabase } from '../lib/supabase';
 import {
@@ -28,6 +29,49 @@ export class AuthValidationError extends Error {
     super(message);
     this.name = 'AuthValidationError';
   }
+}
+
+/**
+ * On web, exchange a PKCE recovery `code` from the current URL (password reset
+ * email link). Returns true when a code was present and exchanged successfully.
+ */
+export async function exchangeRecoveryCodeFromUrl(url?: string): Promise<boolean> {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const search =
+    url !== undefined
+      ? (() => {
+          try {
+            return new URL(url).search;
+          } catch {
+            return '';
+          }
+        })()
+      : window.location.search;
+
+  const params = new URLSearchParams(search);
+  const errorDescription = params.get('error_description');
+  if (errorDescription) {
+    throw new Error(errorDescription);
+  }
+
+  const code = params.get('code');
+  if (!code) {
+    return false;
+  }
+
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) {
+    throw error;
+  }
+
+  if (url === undefined) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  return true;
 }
 
 export async function clearLocalAuthSession(): Promise<void> {
@@ -137,6 +181,32 @@ export async function signInWithEmail(
     }
     logger.error('Sign in failed', error, { email: maskEmail(normalizedEmail), table: 'auth.users' });
     throw error;
+  }
+}
+
+/**
+ * Send a password recovery email. Always resolves successfully so callers can
+ * show a generic confirmation without revealing whether the email exists.
+ */
+export async function recoverPassword(email: string): Promise<void> {
+  const normalizedEmail = normalizeEmail(email);
+  logger.info('Password recovery requested', { email: maskEmail(normalizedEmail), table: 'auth.users' });
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+      redirectTo: getPasswordResetRedirectUrl(),
+    });
+    if (error) {
+      throw error;
+    }
+    logger.info('Password recovery email sent', { email: maskEmail(normalizedEmail), table: 'auth.users' });
+  } catch (error) {
+    // Do not surface whether the account exists; log for diagnostics only.
+    logger.warn('Password recovery request failed', {
+      email: maskEmail(normalizedEmail),
+      reason: toUserFriendlyAuthError(error),
+      table: 'auth.users',
+    });
   }
 }
 

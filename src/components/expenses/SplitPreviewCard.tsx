@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import type { GroupMemberWithProfile } from '../../types/views';
 import { colors, layout, radii, spacing, typography } from '../../theme';
 import { formatCAD } from '../../utils/money';
+import { isPendingParticipant } from '../../utils/groupParticipants';
 import { UserAvatar, memberAvatarStatus } from '../common/UserAvatar';
 
 export interface SplitPreviewRow {
@@ -34,7 +35,9 @@ export function SplitPreviewCard({
         gap: spacing.sm,
       }}
     >
-      {rows.map(({ member, amountCents }) => (
+      {rows.map(({ member, amountCents }) => {
+        const pending = isPendingParticipant(member);
+        return (
         <View key={member.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <UserAvatar
             avatarUrl={member.avatarUrl}
@@ -42,10 +45,13 @@ export function SplitPreviewCard({
             email={member.email}
             initials={member.avatarLabel}
             size={32}
-            status={memberAvatarStatus(member.role, member.invitationStatus)}
+            status={pending ? 'pending' : memberAvatarStatus(member.role, member.invitationStatus)}
           />
           <Text style={[typography.body, { flex: 1, color: colors.textPrimary }]} numberOfLines={1}>
             {member.displayName}
+            {pending ? (
+              <Text style={[typography.caption, { color: '#F59E0B' }]}> · Pending</Text>
+            ) : null}
           </Text>
           <View
             style={{
@@ -59,7 +65,8 @@ export function SplitPreviewCard({
           />
           <Text style={[typography.bodyMedium, { color: colors.textPrimary }]}>{formatCAD(amountCents)}</Text>
         </View>
-      ))}
+        );
+      })}
       <View
         style={{
           marginTop: spacing.xs,

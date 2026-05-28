@@ -1,12 +1,20 @@
+import { AuthValidationError } from '../services/authService';
 import { isInvalidCredentialsError, isRecoverableAuthSessionError } from '../utils/authErrors';
 import { getErrorMessage } from '../utils/errors';
 
 function isExpectedAuthError(error: unknown): boolean {
-  if (isRecoverableAuthSessionError(error) || isInvalidCredentialsError(error)) {
+  if (
+    error instanceof AuthValidationError ||
+    isRecoverableAuthSessionError(error) ||
+    isInvalidCredentialsError(error)
+  ) {
     return true;
   }
   if (typeof error === 'object' && error !== null && 'name' in error) {
     const name = String((error as { name?: string }).name ?? '');
+    if (name === 'AuthValidationError') {
+      return true;
+    }
     if (name === 'AuthApiError' && isRecoverableAuthSessionError(error)) {
       return true;
     }
@@ -36,10 +44,12 @@ export function installExpectedAuthErrorHandlers(): void {
   const originalConsoleError = console.error.bind(console);
   console.error = (...args: unknown[]) => {
     const message = messageFromArgs(args);
+    const lower = message.toLowerCase();
     if (
       isRecoverableAuthSessionError({ message }) ||
       isInvalidCredentialsError({ message }) ||
-      message.toLowerCase().includes('invalid login credentials')
+      lower.includes('invalid login credentials') ||
+      lower.includes('invalid email or password')
     ) {
       console.warn(...args);
       return;

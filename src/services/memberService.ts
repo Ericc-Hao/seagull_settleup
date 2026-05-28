@@ -6,6 +6,7 @@ import type { GroupMemberWithProfile } from '../types/views';
 import { getCachedUserId } from '../lib/auth';
 import { createLogger } from '../utils/logger';
 import { avatarInitials } from '../utils/avatar';
+import { isSplitSelectableMember, resolveAvatarLabel, resolveDisplayNameFromMember } from '../utils/groupParticipants';
 import { getGroupMembers, readDb } from './dbHelpers';
 import { findProfileByEmail, getAvatarUrl } from './profileService';
 
@@ -323,3 +324,42 @@ export function partitionMembers(members: GroupMemberWithProfile[]) {
   );
   return { active, pending, inactive };
 }
+
+/** Resolve any group member (including historical/declined) for expense display. */
+export function resolveMemberWithProfile(
+  memberId: string,
+  groupId: string,
+  db = readDb(),
+): GroupMemberWithProfile | undefined {
+  const member = db.groupMembers.find((entry) => entry.id === memberId && entry.groupId === groupId);
+  if (!member) {
+    return undefined;
+  }
+
+  const profile = member.userId
+    ? db.profiles.find((entry) => entry.userId === member.userId)
+    : member.email
+      ? db.profiles.find(
+          (entry) => entry.email?.trim().toLowerCase() === member.email?.trim().toLowerCase(),
+        )
+      : undefined;
+
+  const displayName = resolveDisplayNameFromMember(member, profile?.displayName);
+  const email = profile?.email ?? member.email ?? undefined;
+
+  return {
+    id: member.id,
+    groupId: member.groupId,
+    userId: member.userId,
+    email,
+    displayName,
+    role: member.role,
+    invitationStatus: member.invitationStatus,
+    isActive: member.isActive,
+    avatarUrl: profile?.avatarUrl,
+    avatarLabel: resolveAvatarLabel(displayName, email),
+    isRegistered: Boolean(member.userId),
+  };
+}
+
+export { filterSplitSelectableMembers, isSplitSelectableMember, isPendingParticipant, isActiveRegisteredMember } from '../utils/groupParticipants';

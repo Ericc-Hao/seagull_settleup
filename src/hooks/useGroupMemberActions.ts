@@ -7,6 +7,7 @@ import {
   getInvitationByGroupMemberId,
   resendInvitation,
 } from '../services/invitationService';
+import { memberHasExpenseParticipation } from '../services/expenseService';
 import { deactivateGroupMember } from '../services/memberService';
 import type { GroupMemberWithProfile } from '../types/views';
 import { toUserFriendlyError } from '../utils/errors';
@@ -43,26 +44,42 @@ export function useGroupMemberActions(groupId: string, refreshMembers: () => Pro
 
   const cancelMemberInvitation = useCallback(
     async (member: GroupMemberWithProfile) => {
-      logger.info('Cancel invitation started', { groupId, memberId: member.id });
-      setActionLoading(true);
-      setActionError(undefined);
-      try {
-        const invitationId =
-          member.invitationId ?? (await getInvitationByGroupMemberId(member.id))?.id;
-        if (!invitationId) {
-          throw new Error('No pending invitation found for this member.');
+      const runCancel = async () => {
+        logger.info('Cancel invitation started', { groupId, memberId: member.id });
+        setActionLoading(true);
+        setActionError(undefined);
+        try {
+          const invitationId =
+            member.invitationId ?? (await getInvitationByGroupMemberId(member.id))?.id;
+          if (!invitationId) {
+            throw new Error('No pending invitation found for this member.');
+          }
+          await cancelInvitation(invitationId);
+          invalidateAfterGroupMemberChange(invalidate, groupId);
+          await refreshMembers();
+          logger.info('Cancel invitation succeeded', { groupId, memberId: member.id, invitationId });
+        } catch (error) {
+          logger.error('Cancel invitation failed', error, { groupId, memberId: member.id });
+          setActionError(toUserFriendlyError(error, 'Unable to cancel invitation.'));
+          throw error;
+        } finally {
+          setActionLoading(false);
         }
-        await cancelInvitation(invitationId);
-        invalidateAfterGroupMemberChange(invalidate, groupId);
-        await refreshMembers();
-        logger.info('Cancel invitation succeeded', { groupId, memberId: member.id, invitationId });
-      } catch (error) {
-        logger.error('Cancel invitation failed', error, { groupId, memberId: member.id });
-        setActionError(toUserFriendlyError(error, 'Unable to cancel invitation.'));
-        throw error;
-      } finally {
-        setActionLoading(false);
+      };
+
+      if (memberHasExpenseParticipation(member.id)) {
+        Alert.alert(
+          'Remove pending member?',
+          'This pending member is included in existing expenses. Removing the invitation will stop them from future splits but keep historical records.',
+          [
+            { text: 'Keep Invitation', style: 'cancel' },
+            { text: 'Remove Anyway', style: 'destructive', onPress: () => void runCancel() },
+          ],
+        );
+        return;
       }
+
+      await runCancel();
     },
     [groupId, invalidate, refreshMembers],
   );

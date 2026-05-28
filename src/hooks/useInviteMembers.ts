@@ -2,9 +2,10 @@ import { useCallback, useState } from 'react';
 
 import { useAppData } from '../context/AppDataContext';
 import { ensureProfileExists } from '../services/profileService';
-import { inviteMoreMembers } from '../services/invitationService';
+import { hasDuplicateInviteEmailInGroup, inviteMoreMembers } from '../services/invitationService';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import { INVITE_EMAIL_ERRORS, resolveFinalInviteEmails } from '../utils/inviteEmailSubmit';
 import { invalidateAfterInviteMember } from '../utils/mutationInvalidation';
 import {
   hasDuplicateEmail,
@@ -62,22 +63,40 @@ export function useInviteMembers(groupId: string) {
     if (submitting) {
       return;
     }
-    if (invitedEmails.length === 0) {
-      setSubmitError('Add at least one email to invite.');
-      throw new Error('Add at least one email to invite.');
+
+    setSubmitError(undefined);
+    setEmailError(undefined);
+
+    const resolved = resolveFinalInviteEmails(invitedEmails, emailValue, { requireAtLeastOne: true });
+    if (!resolved.ok) {
+      setEmailError(resolved.error);
+      throw new Error(resolved.error);
+    }
+
+    const profile = await ensureProfileExists();
+    const ownerEmail = profile?.email ? normalizeEmail(profile.email) : null;
+    if (ownerEmail && resolved.finalEmails.some((email) => email === ownerEmail)) {
+      setEmailError('You are already a member of this group.');
+      throw new Error('You are already a member of this group.');
+    }
+
+    if (groupId && (await hasDuplicateInviteEmailInGroup(groupId, resolved.finalEmails))) {
+      setEmailError(INVITE_EMAIL_ERRORS.duplicate);
+      throw new Error(INVITE_EMAIL_ERRORS.duplicate);
     }
 
     setSubmitting(true);
-    setSubmitError(undefined);
     setWarnings([]);
-    logger.info('Invite more members submit started', { groupId, emailCount: invitedEmails.length });
+    logger.info('Invite more members submit started', { groupId, emailCount: resolved.finalEmails.length });
 
     try {
-      const result = await inviteMoreMembers(groupId, invitedEmails);
+      const result = await inviteMoreMembers(groupId, resolved.finalEmails);
       invalidateAfterInviteMember(invalidate, groupId);
       void refreshNotifications();
       setWarnings(result.warnings);
       setInvitedEmails([]);
+      setEmailValue('');
+      setEmailError(undefined);
       logger.info('Invite more members submit succeeded', { groupId, invitationCount: result.invitations.length });
       return result;
     } catch (error) {
@@ -88,7 +107,7 @@ export function useInviteMembers(groupId: string) {
     } finally {
       setSubmitting(false);
     }
-  }, [groupId, invitedEmails, invalidate, refreshNotifications, submitting]);
+  }, [emailValue, groupId, invitedEmails, invalidate, refreshNotifications, submitting]);
 
   return {
     invitedEmails,

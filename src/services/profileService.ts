@@ -100,11 +100,20 @@ export async function ensureProfileExists(): Promise<Profile | null> {
     }
 
     const metadata = user.user_metadata ?? {};
+    const firstString = (...values: unknown[]): string | null => {
+      for (const value of values) {
+        if (typeof value === 'string' && value.trim()) {
+          return value.trim();
+        }
+      }
+      return null;
+    };
+
+    // Supports display_name from sign-up metadata and full_name/name from external providers.
     const displayName =
-      typeof metadata.display_name === 'string' && metadata.display_name.trim()
-        ? metadata.display_name.trim()
-        : emailPrefix(user.email);
+      firstString(metadata.display_name, metadata.full_name, metadata.name) ?? emailPrefix(user.email);
     const phone = typeof metadata.phone === 'string' ? metadata.phone : null;
+    const avatarUrl = firstString(metadata.avatar_url, metadata.picture);
 
     const { data, error } = await supabase
       .from('profiles')
@@ -113,6 +122,7 @@ export async function ensureProfileExists(): Promise<Profile | null> {
         display_name: displayName,
         email: user.email ?? null,
         phone,
+        avatar_url: avatarUrl,
         default_currency: 'CAD',
         emt_email: user.email ?? null,
         emt_phone: phone,

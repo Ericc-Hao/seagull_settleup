@@ -5,11 +5,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#EEF1FF"
-    },
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#EEF1FF",
     "scheme": "seagullsplit",
@@ -53,9 +48,6 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#EEF1FF"
-      },
-      "navigationBar": {
         "backgroundColor": "#EEF1FF"
       },
       "predictiveBackGestureEnabled": false,

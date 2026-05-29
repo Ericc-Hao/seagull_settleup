@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAppData } from '../context/AppDataContext';
-import { getAccessibleGroupOptions } from '../services/groupService';
+import { getExpenseSelectableGroupOptions } from '../services/groupService';
 import type { GroupSelectorOption } from '../types/views';
 
 export function useGroups() {
@@ -22,7 +22,7 @@ export function useGroups() {
       setInitialLoading(true);
     }
 
-    const data = getAccessibleGroupOptions();
+    const data = getExpenseSelectableGroupOptions();
     setGroups(data);
     hasLoadedOnceRef.current = true;
     setHasLoadedOnce(true);

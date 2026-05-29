@@ -29,6 +29,30 @@ export function DeleteGroupModal({
   );
 }
 
+export function ReactivateGroupModal({
+  visible,
+  onCancel,
+  onConfirm,
+  loading = false,
+}: {
+  visible: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  loading?: boolean;
+}) {
+  return (
+    <ConfirmModal
+      visible={visible}
+      title="Reactivate Group?"
+      body="This group will appear in active groups again and members can add new shared expenses."
+      confirmLabel={loading ? 'Updating...' : 'Reactivate Group'}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      loading={loading}
+    />
+  );
+}
+
 export function SetInactiveModal({
   visible,
   onCancel,

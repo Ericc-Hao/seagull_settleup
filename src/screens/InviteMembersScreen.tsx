@@ -1,9 +1,12 @@
 import { router } from 'expo-router';
+import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 
 import { FormSection, PrimaryButton, ScreenLayout, ScreenPageHeader } from '../components';
-import { InviteMembersCard } from '../components/groups';
+import { InactiveGroupMutationBlock, InviteMembersCard } from '../components/groups';
+import { useAppData } from '../context/AppDataContext';
 import { useInviteMembers } from '../hooks/useInviteMembers';
+import { canMutateGroup, getGroupById } from '../services/groupService';
 import { colors, layout, typography } from '../theme';
 import { safeBack } from '../utils/navigation';
 
@@ -12,7 +15,17 @@ interface InviteMembersScreenProps {
 }
 
 export function InviteMembersScreen({ groupId }: InviteMembersScreenProps) {
+  const { versions, getGroupDetailVersion } = useAppData();
+  const groupDetailVersion = getGroupDetailVersion(groupId);
+  const group = useMemo(
+    () => getGroupById(groupId),
+    [groupId, versions.groups, groupDetailVersion],
+  );
   const form = useInviteMembers(groupId);
+
+  if (group && !canMutateGroup(group)) {
+    return <InactiveGroupMutationBlock groupId={groupId} title="Invite Members" />;
+  }
 
   const handleSubmit = () => {
     void form

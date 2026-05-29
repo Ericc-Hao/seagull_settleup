@@ -6,6 +6,7 @@ import {
   fetchGroupById,
   getCurrentUserId,
   getGroupById,
+  reactivateGroup,
   setGroupInactive,
 } from '../services/groupService';
 import { getGroupExpenses, readDb } from '../services/dbHelpers';
@@ -17,6 +18,7 @@ import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
 import {
   invalidateAfterDeleteGroup,
+  invalidateAfterReactivateGroup,
   invalidateAfterSetGroupInactive,
 } from '../utils/mutationInvalidation';
 import { useGroupParticipants } from './useGroupParticipants';
@@ -114,6 +116,23 @@ export function useGroupDetail(groupId: string) {
     }
   }, [groupId, invalidate]);
 
+  const reactivate = useCallback(async () => {
+    setActionLoading(true);
+    setActionError(undefined);
+    logger.info('Reactivate group confirmation started', { groupId });
+    try {
+      await reactivateGroup(groupId);
+      invalidateAfterReactivateGroup(invalidate, groupId);
+      logger.info('Reactivate group confirmation succeeded', { groupId });
+    } catch (error) {
+      logger.error('Reactivate group confirmation failed', error, { groupId });
+      setActionError(toUserFriendlyError(error, 'Unable to reactivate group.'));
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
+  }, [groupId, invalidate]);
+
   const removeGroup = useCallback(async () => {
     setActionLoading(true);
     setActionError(undefined);
@@ -131,6 +150,16 @@ export function useGroupDetail(groupId: string) {
     }
   }, [groupId, invalidate]);
 
+  const dateLabel = useMemo(() => {
+    if (!group) {
+      return '';
+    }
+    if (group.status === 'inactive') {
+      return 'Inactive';
+    }
+    return formatOptionalDateRange(group.startDate, group.endDate);
+  }, [group]);
+
   return {
     group,
     loadingGroup: !ready || loadingGroup,
@@ -142,10 +171,11 @@ export function useGroupDetail(groupId: string) {
     currentUserRole,
     currentUserId: userId,
     isInactive: group?.status === 'inactive',
-    dateLabel: group ? formatOptionalDateRange(group.startDate, group.endDate) : '',
+    dateLabel,
     totalSpentLabel: formatCAD(totalSpentCents),
     recentExpenses,
     setInactive,
+    reactivate,
     removeGroup,
     actionError,
     actionLoading,

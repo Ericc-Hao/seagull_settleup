@@ -7,7 +7,12 @@ import type { CategoryKey } from '../constants/categories';
 import type { SplitPreviewRow } from '../components/expenses/SplitPreviewCard';
 import { getCachedCategories } from '../services/categoryService';
 import { createPersonalExpense, createSplitExpense } from '../services/expenseService';
-import { getCurrentUserId, getGroupById } from '../services/groupService';
+import {
+  getCurrentUserId,
+  getGroupById,
+  isGroupActiveForNewExpenses,
+  INACTIVE_GROUP_EXPENSE_MESSAGE,
+} from '../services/groupService';
 import type { ExpenseType, SplitMethod } from '../types/models';
 import type { CurrencyCode } from '../types/currency';
 import { normalizeCurrencyCode } from '../types/currency';
@@ -138,12 +143,26 @@ export function useAddExpenseForm(
 
   const selectedGroupRecord = selectedGroupId ? getGroupById(selectedGroupId) : undefined;
   const isOwner = selectedGroupRecord?.ownerId === userId;
+  const selectedGroupInactive = selectedGroupRecord
+    ? !isGroupActiveForNewExpenses(selectedGroupRecord)
+    : false;
 
   useEffect(() => {
     if (initialGroupId) {
       setSelectedGroupId(initialGroupId);
     }
   }, [initialGroupId]);
+
+  useEffect(() => {
+    if (!selectedGroupId || kind !== 'split') {
+      return;
+    }
+    const group = getGroupById(selectedGroupId);
+    if (group && !isGroupActiveForNewExpenses(group)) {
+      setSelectedGroupId(undefined);
+      setSubmitError(INACTIVE_GROUP_EXPENSE_MESSAGE);
+    }
+  }, [kind, selectedGroupId, versions.groups]);
 
   useEffect(() => {
     if (kind !== 'split' || members.length === 0) {
@@ -227,6 +246,9 @@ export function useAddExpenseForm(
       if (!selectedGroupId) {
         return 'Please select a group.';
       }
+      if (selectedGroupInactive) {
+        return INACTIVE_GROUP_EXPENSE_MESSAGE;
+      }
       if (!payerMemberId) {
         return 'Please choose who paid.';
       }
@@ -241,7 +263,7 @@ export function useAddExpenseForm(
       return 'Please select a category.';
     }
     return undefined;
-  }, [amountCents, categoryKey, customSplitValid, kind, payerMemberId, selectedGroupId, splitMemberIds.length]);
+  }, [amountCents, categoryKey, customSplitValid, kind, payerMemberId, selectedGroupId, selectedGroupInactive, splitMemberIds.length]);
 
   const canSave = !saving && !validationError;
 

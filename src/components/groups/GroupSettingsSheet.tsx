@@ -63,20 +63,24 @@ function SettingsSection({ title, children }: { title: string; children: React.R
 export function GroupSettingsSheet({
   visible,
   isOwner,
+  isInactive = false,
   onClose,
   onManageMembers,
   onInviteMembers,
   onEditGroup,
   onSetInactive,
+  onReactivate,
   onDeleteGroup,
 }: {
   visible: boolean;
   isOwner: boolean;
+  isInactive?: boolean;
   onClose: () => void;
   onManageMembers: () => void;
   onInviteMembers: () => void;
   onEditGroup: () => void;
   onSetInactive: () => void;
+  onReactivate: () => void;
   onDeleteGroup: () => void;
 }) {
   return (
@@ -84,7 +88,7 @@ export function GroupSettingsSheet({
       <View style={{ gap: spacing.lg }}>
         <SettingsSection title="Members">
           <SettingsActionRow label="Manage Members" icon="users" onPress={onManageMembers} />
-          {isOwner ? (
+          {isOwner && !isInactive ? (
             <SettingsActionRow label="Invite More Members" icon="envelope" onPress={onInviteMembers} />
           ) : null}
         </SettingsSection>
@@ -92,7 +96,11 @@ export function GroupSettingsSheet({
         {isOwner ? (
           <SettingsSection title="Group">
             <SettingsActionRow label="Edit Group Details" icon="pencil-square" onPress={onEditGroup} />
-            <SettingsActionRow label="Set Group Inactive" icon="lock-closed" onPress={onSetInactive} tone="warning" />
+            {isInactive ? (
+              <SettingsActionRow label="Reactivate Group" icon="arrow-path" onPress={onReactivate} />
+            ) : (
+              <SettingsActionRow label="Set Group Inactive" icon="lock-closed" onPress={onSetInactive} tone="warning" />
+            )}
             <SettingsActionRow label="Delete Group" icon="x-mark" onPress={onDeleteGroup} tone="danger" />
           </SettingsSection>
         ) : null}

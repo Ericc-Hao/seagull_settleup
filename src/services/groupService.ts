@@ -23,8 +23,16 @@ import {
   fetchGroupsForCurrentUser,
   getAccessibleGroupsForUser,
   isActiveGroupStatus,
+  isGroupInactive,
 } from './groupAccess';
-export { getAccessibleGroupsForUser } from './groupAccess';
+export {
+  getAccessibleGroupsForUser,
+  isGroupInactive,
+  isGroupActiveForNewExpenses,
+  canMutateGroup,
+  INACTIVE_GROUP_EXPENSE_MESSAGE,
+  INACTIVE_GROUP_MUTATION_MESSAGE,
+} from './groupAccess';
 import { createGroupInvitation, sendInvitationEmail } from './invitationService';
 import { ensureProfileExists } from './profileService';
 import { getCurrentUserGroupBalanceSummary } from './settlementService';
@@ -321,22 +329,58 @@ export async function setGroupInactive(groupId: string): Promise<Group> {
       throw new Error('Only the group owner can set a group inactive.');
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('groups')
       .update({
         status: 'inactive',
         inactive_at: new Date().toISOString(),
       })
-      .eq('id', groupId);
+      .eq('id', groupId)
+      .select(GROUP_COLUMNS)
+      .single();
 
     if (error) {
       throw error;
     }
 
     logger.info('Set group inactive succeeded', { table: 'groups', groupId });
-    return getGroupOrThrow(groupId);
+    return mapGroup(data);
   } catch (error) {
     logger.error('Set group inactive failed', error, { table: 'groups', groupId });
+    throw error;
+  }
+}
+
+export async function reactivateGroup(groupId: string): Promise<Group> {
+  logger.info('Reactivate group started', { table: 'groups', groupId });
+  try {
+    const userId = getCurrentUserId();
+    const group = getGroupOrThrow(groupId);
+    if (group.ownerId !== userId) {
+      throw new Error('Only the group owner can reactivate a group.');
+    }
+    if (!isGroupInactive(group)) {
+      throw new Error('This group is already active.');
+    }
+
+    const { data, error } = await supabase
+      .from('groups')
+      .update({
+        status: 'active',
+        inactive_at: null,
+      })
+      .eq('id', groupId)
+      .select(GROUP_COLUMNS)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    logger.info('Reactivate group succeeded', { table: 'groups', groupId });
+    return mapGroup(data);
+  } catch (error) {
+    logger.error('Reactivate group failed', error, { table: 'groups', groupId });
     throw error;
   }
 }
@@ -455,12 +499,13 @@ export async function fetchAccessibleGroupOptions(
   logger.info('Fetch accessible group options started', { table: 'groups' });
   try {
     const groups = await fetchAccessibleGroups();
-    if (groups.length === 0) {
+    const activeGroups = groups.filter((group) => isActiveGroupStatus(group.status));
+    if (activeGroups.length === 0) {
       logger.info('Fetch accessible group options succeeded', { count: 0, table: 'groups' });
       return [];
     }
 
-    const groupIds = groups.map((group) => group.id);
+    const groupIds = activeGroups.map((group) => group.id);
     const { data: memberRows, error: membersError } = await supabase
       .from('group_members')
       .select('group_id, role, invitation_status, is_active')
@@ -471,7 +516,7 @@ export async function fetchAccessibleGroupOptions(
     }
 
     const members = memberRows ?? [];
-    const options = groups.map((group) => ({
+    const options = activeGroups.map((group) => ({
       id: group.id,
       name: group.name,
       type: group.type,
@@ -492,14 +537,21 @@ export async function fetchAccessibleGroupOptions(
 
 export function getAccessibleGroupOptions(userId: string = getCurrentUserId()): GroupSelectorOption[] {
   const db = readDb();
-  return getAccessibleGroupsForUser(userId, db).map((group) => ({
-    id: group.id,
-    name: group.name,
-    type: group.type,
-    memberCount: getGroupMembers(group.id, db).filter(
-      (m) => m.role === 'owner' || (m.invitationStatus === 'active' && m.isActive !== false),
-    ).length,
-  }));
+  return getAccessibleGroupsForUser(userId, db)
+    .filter((group) => isActiveGroupStatus(group.status))
+    .map((group) => ({
+      id: group.id,
+      name: group.name,
+      type: group.type,
+      memberCount: getGroupMembers(group.id, db).filter(
+        (m) => m.role === 'owner' || (m.invitationStatus === 'active' && m.isActive !== false),
+      ).length,
+    }));
+}
+
+/** Active groups only — for Add Expense / Split Bill selectors. */
+export function getExpenseSelectableGroupOptions(userId: string = getCurrentUserId()): GroupSelectorOption[] {
+  return getAccessibleGroupOptions(userId);
 }
 
 export function getPrimaryGroupIdForUser(userId: string = getCurrentUserId()): string | undefined {

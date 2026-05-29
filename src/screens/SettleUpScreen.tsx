@@ -18,10 +18,12 @@ import {
   SettlementHistoryCard,
   TeamSettlementModal,
 } from '../components/settlements';
+import { InactiveGroupMutationBlock } from '../components/groups/InactiveGroupMutationBlock';
 import { SectionCard } from '../components/SectionCard';
 import { useGlobalSettleUpData } from '../hooks/useGlobalSettleUpData';
 import { useSettleUpData } from '../hooks/useSettleUpData';
 import { useTeamSettlement } from '../hooks/useTeamSettlement';
+import { canMutateGroup } from '../services/groupService';
 import { markTransferAsPaid } from '../services/settlementService';
 import type { PendingTransferView } from '../types/views';
 import { colors, typography } from '../theme';
@@ -93,6 +95,10 @@ export function SettleUpScreen({ mode, groupId }: SettleUpScreenProps) {
         </Text>
       </ScreenLayout>
     );
+  }
+
+  if (!isGlobal && groupId && groupData.group && !canMutateGroup(groupData.group)) {
+    return <InactiveGroupMutationBlock groupId={groupId} title="Pending Transfers" />;
   }
 
   const handleConfirmPaid = async () => {

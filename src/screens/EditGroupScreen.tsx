@@ -6,7 +6,8 @@ import { FormSection, PrimaryButton, ScreenLayout, ScreenPageHeader, SecondaryBu
 import { DateField, FormInput } from '../components/form';
 import { GroupTypeSelector } from '../components/groups';
 import { useAppData } from '../context/AppDataContext';
-import { getGroupById, updateGroupDetails } from '../services/groupService';
+import { canMutateGroup, getGroupById, updateGroupDetails } from '../services/groupService';
+import { InactiveGroupMutationBlock } from '../components/groups/InactiveGroupMutationBlock';
 import type { GroupType } from '../types/models';
 import { formatDateForSupabase, isEndDateValid, parseSupabaseDate } from '../utils/date';
 import { toUserFriendlyError } from '../utils/errors';
@@ -98,6 +99,10 @@ export function EditGroupScreen({ groupId }: EditGroupScreenProps) {
         <Text style={[typography.body, { color: colors.textSecondary }]}>This group could not be loaded.</Text>
       </ScreenLayout>
     );
+  }
+
+  if (!canMutateGroup(group)) {
+    return <InactiveGroupMutationBlock groupId={groupId} title="Edit Group Details" />;
   }
 
   return (

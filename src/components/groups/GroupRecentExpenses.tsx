@@ -14,7 +14,7 @@ export function GroupRecentExpenses({
 }: {
   expenses: RecentGroupExpenseView[];
   groupId: string;
-  onAddExpense: () => void;
+  onAddExpense?: () => void;
 }) {
   if (expenses.length === 0) {
     return (
@@ -22,9 +22,13 @@ export function GroupRecentExpenses({
         <SectionTitle title="Recent Expenses" />
         <EmptyStateCard
           title="No expenses yet"
-          message="Add a shared expense to start tracking spending in this group."
-          ctaLabel="Add Expense"
-          ctaIcon="document-plus"
+          message={
+            onAddExpense
+              ? 'Add a shared expense to start tracking spending in this group.'
+              : 'Historical expenses will appear here.'
+          }
+          ctaLabel={onAddExpense ? 'Add Expense' : undefined}
+          ctaIcon={onAddExpense ? 'document-plus' : undefined}
           onPress={onAddExpense}
         />
       </View>

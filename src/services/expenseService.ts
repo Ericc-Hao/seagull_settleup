@@ -31,6 +31,7 @@ import {
   readDb,
 } from './dbHelpers';
 import { getCurrentUserId, getGroupById } from './groupService';
+import { isActiveGroupStatus, INACTIVE_GROUP_EXPENSE_MESSAGE } from './groupAccess';
 import { createReceipt, getExpenseReceiptView, toExpenseReceiptView } from './receiptService';
 import { getSettleableMembersWithProfiles, getCurrentUserGroupBalanceSummary } from './settlementService';
 import { resolveMemberWithProfile } from './memberService';
@@ -615,6 +616,23 @@ export async function createSplitExpense(input: CreateSplitExpenseInput): Promis
     const userId = userData.user?.id;
     if (!userId) {
       throw new Error('You must be logged in to save an expense.');
+    }
+
+    const cachedGroup = getGroupById(input.groupId);
+    if (cachedGroup && !isActiveGroupStatus(cachedGroup.status)) {
+      throw new Error(INACTIVE_GROUP_EXPENSE_MESSAGE);
+    }
+
+    const { data: groupRow, error: groupError } = await supabase
+      .from('groups')
+      .select('status')
+      .eq('id', input.groupId)
+      .maybeSingle();
+    if (groupError) {
+      throw groupError;
+    }
+    if (!groupRow || !isActiveGroupStatus(groupRow.status as Group['status'])) {
+      throw new Error(INACTIVE_GROUP_EXPENSE_MESSAGE);
     }
 
     const expenseDate = input.expenseDate.split('T')[0];

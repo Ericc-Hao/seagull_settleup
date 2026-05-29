@@ -9,6 +9,36 @@ describe('receiptScanErrors', () => {
     expect(error.code).toBe('not_configured');
   });
 
+  it('classifies invalid receipt image messages', () => {
+    const error = classifyReceiptScanError(new Error('Could not read the receipt image. Please try another image.'));
+    expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.invalidImage);
+    expect(error.code).toBe('invalid_image');
+  });
+
+  it('classifies invalid receipt response messages', () => {
+    const error = classifyReceiptScanError(new Error('We could not read the receipt result. Please enter the amount manually.'));
+    expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.invalidResponse);
+    expect(error.code).toBe('invalid_response');
+  });
+
+  it('classifies no amount detected messages', () => {
+    const error = classifyReceiptScanError(new Error('We could not detect the total. Please enter the amount manually.'));
+    expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.noAmount);
+    expect(error.code).toBe('no_amount');
+  });
+
+  it('classifies not_deployed marker messages', () => {
+    const error = classifyReceiptScanError(new Error('scan-receipt not_deployed on project'));
+    expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.notDeployed);
+    expect(error.code).toBe('not_deployed');
+  });
+
+  it('falls back to unknown for unrecognized errors', () => {
+    const error = classifyReceiptScanError(new Error('Something unexpected happened'));
+    expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.generic);
+    expect(error.code).toBe('unknown');
+  });
+
   it('maps server OCR_NOT_CONFIGURED', () => {
     const error = mapReceiptScanServerErrorCode('OCR_NOT_CONFIGURED');
     expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.notConfigured);

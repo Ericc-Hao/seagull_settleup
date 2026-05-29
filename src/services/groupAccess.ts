@@ -24,6 +24,25 @@ export function isActiveGroupStatus(status: Group['status']): boolean {
   return status === 'active' || status === 'planning' || status === 'ready_to_settle';
 }
 
+export function isGroupInactive(group: Pick<Group, 'status'>): boolean {
+  return group.status === 'inactive';
+}
+
+export function isGroupActiveForNewExpenses(group: Pick<Group, 'status'>): boolean {
+  return isActiveGroupStatus(group.status);
+}
+
+export const INACTIVE_GROUP_EXPENSE_MESSAGE =
+  'This group is inactive. Reactivate it before adding new expenses.';
+
+export const INACTIVE_GROUP_MUTATION_MESSAGE =
+  'This group is inactive. Reactivate it before making changes.';
+
+/** False when the group is inactive — blocks edit, invite, settle, and new expenses. */
+export function canMutateGroup(group: Pick<Group, 'status'>): boolean {
+  return !isGroupInactive(group);
+}
+
 export function isActiveMembership(member: GroupMember | undefined): boolean {
   if (!member) {
     return false;

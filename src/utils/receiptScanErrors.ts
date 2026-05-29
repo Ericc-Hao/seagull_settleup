@@ -27,6 +27,7 @@ export const RECEIPT_SCAN_MESSAGES = {
     'Could not fetch the exchange rate. Please enter the amount manually.',
   unsupportedCurrency:
     'This currency is not supported yet. Please enter the amount manually.',
+  generic: 'Receipt scanning failed. Please try again or enter the amount manually.',
 } as const;
 
 export type ReceiptScanErrorCode =
@@ -46,7 +47,8 @@ export type ReceiptScanErrorCode =
   | 'missing_image_data'
   | 'currency_not_detected'
   | 'exchange_rate_unavailable'
-  | 'unsupported_currency';
+  | 'unsupported_currency'
+  | 'unknown';
 
 export class ReceiptScanError extends Error {
   readonly code: ReceiptScanErrorCode;
@@ -84,6 +86,7 @@ const EXPECTED_CODES = new Set<ReceiptScanErrorCode>([
   'currency_not_detected',
   'exchange_rate_unavailable',
   'unsupported_currency',
+  'unknown',
 ]);
 
 export function mapReceiptScanServerErrorCode(
@@ -175,39 +178,54 @@ export function classifyReceiptScanError(error: unknown): ReceiptScanError {
   const message = getErrorMessage(error);
   const lower = message.toLowerCase();
 
+  if (lower.includes('not_deployed') || lower.includes('function not found')) {
+    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.notDeployed, 'not_deployed');
+  }
+
   if (lower.includes('receipt scanning is not configured correctly')) {
     return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.notConfiguredCorrectly, 'not_configured_correctly');
   }
-  if (lower.includes('receipt scanning is not configured')) {
+
+  if (lower.includes('not configured')) {
     return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.notConfigured, 'not_configured');
   }
-  if (lower.includes('temporarily rate limited')) {
-    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.rateLimited, 'rate_limited');
-  }
-  if (lower.includes('ocr quota has been reached')) {
-    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.quotaExceeded, 'quota_exceeded');
-  }
-  if (lower.includes('receipt image could not be processed')) {
-    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.badRequest, 'bad_request');
-  }
-  if (lower.includes('receipt image is missing')) {
-    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.missingImage, 'missing_image');
-  }
+
   if (lower.includes('could not read the receipt image')) {
     return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.invalidImage, 'invalid_image');
   }
+
   if (lower.includes('could not read the receipt result')) {
     return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.invalidResponse, 'invalid_response');
   }
+
+  if (lower.includes('could not detect the total') || lower.includes('no amount detected')) {
+    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.noAmount, 'no_amount');
+  }
+
+  if (lower.includes('temporarily rate limited')) {
+    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.rateLimited, 'rate_limited');
+  }
+
+  if (lower.includes('ocr quota has been reached')) {
+    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.quotaExceeded, 'quota_exceeded');
+  }
+
+  if (lower.includes('receipt image could not be processed')) {
+    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.badRequest, 'bad_request');
+  }
+
+  if (lower.includes('receipt image is missing')) {
+    return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.missingImage, 'missing_image');
+  }
+
   if (
-    lower.includes('function not found') ||
     lower.includes('404') ||
-    lower.includes('not found') ||
     lower.includes('failed to send a request') ||
     lower.includes('edge function')
   ) {
     return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.notDeployed, 'not_deployed');
   }
+
   if (
     lower.includes('network request failed') ||
     lower.includes('network error') ||
@@ -218,5 +236,5 @@ export function classifyReceiptScanError(error: unknown): ReceiptScanError {
     return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.network, 'network');
   }
 
-  return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.ocrFailed, 'ocr_failed');
+  return new ReceiptScanError(RECEIPT_SCAN_MESSAGES.generic, 'unknown');
 }

@@ -1,4 +1,4 @@
-import { Children, ReactElement, ReactNode, cloneElement, isValidElement } from 'react';
+import { Children, Fragment, ReactElement, ReactNode, cloneElement, isValidElement } from 'react';
 import { StyleProp, View, ViewStyle } from 'react-native';
 
 type StackProps = {
@@ -11,11 +11,34 @@ type StackProps = {
 
 type StyledChild = ReactElement<{ style?: StyleProp<ViewStyle> }>;
 
+function flattenStackChildren(children: ReactNode): ReactNode[] {
+  const items: ReactNode[] = [];
+
+  Children.forEach(children, (child) => {
+    if (child == null || child === false) {
+      return;
+    }
+
+    if (isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment) {
+      items.push(...flattenStackChildren(child.props.children));
+      return;
+    }
+
+    items.push(child);
+  });
+
+  return items;
+}
+
 function stackChildren(children: ReactNode, gap: number, axis: 'vertical' | 'horizontal'): ReactNode[] {
-  const items = Children.toArray(children).filter(Boolean);
+  const items = flattenStackChildren(children);
 
   return items.map((child, index) => {
     if (!isValidElement(child) || index === 0 || gap <= 0) {
+      return child;
+    }
+
+    if (child.type === Fragment) {
       return child;
     }
 

@@ -97,7 +97,11 @@ export function invalidateAfterSetGroupInactive(invalidate: InvalidateFn, groupI
   invalidate('groups', { groupId });
   invalidate('home');
   invalidate('group_detail', { groupId });
+  invalidate('expenses', { groupId });
 }
+
+/** Same cache slices as inactive — group status affects selectors and detail. */
+export const invalidateAfterReactivateGroup = invalidateAfterSetGroupInactive;
 
 export function invalidateAfterGroupMemberChange(invalidate: InvalidateFn, groupId: string): void {
   invalidate('group_members', { groupId });

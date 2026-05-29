@@ -18,10 +18,12 @@ import {
   SettlementHistoryCard,
   TeamSettlementModal,
 } from '../components/settlements';
+import { InactiveGroupMutationBlock } from '../components/groups/InactiveGroupMutationBlock';
 import { SectionCard } from '../components/SectionCard';
 import { useGlobalSettleUpData } from '../hooks/useGlobalSettleUpData';
 import { useSettleUpData } from '../hooks/useSettleUpData';
 import { useTeamSettlement } from '../hooks/useTeamSettlement';
+import { canMutateGroup } from '../services/groupService';
 import { markTransferAsPaid } from '../services/settlementService';
 import type { PendingTransferView } from '../types/views';
 import { colors, typography } from '../theme';
@@ -95,24 +97,18 @@ export function SettleUpScreen({ mode, groupId }: SettleUpScreenProps) {
     );
   }
 
+  if (!isGlobal && groupId && groupData.group && !canMutateGroup(groupData.group)) {
+    return <InactiveGroupMutationBlock groupId={groupId} title="Pending Transfers" />;
+  }
+
   const handleConfirmPaid = async () => {
     if (!confirmTransfer) {
       return;
     }
     const transferGroupId = confirmTransfer.groupId;
     setMarking(true);
-    logger.info('Mark as paid started', {
-      groupId: transferGroupId,
-      transferId: confirmTransfer.id,
-      mode: isGlobal ? 'global' : 'group',
-    });
     try {
       await markTransferAsPaid(transferGroupId, confirmTransfer);
-      logger.info('Mark as paid succeeded', {
-        groupId: transferGroupId,
-        transferId: confirmTransfer.id,
-        mode: isGlobal ? 'global' : 'group',
-      });
       setConfirmTransfer(null);
       setDetailTransfer(null);
       invalidateAfterMarkTransferPaid(invalidate, transferGroupId);

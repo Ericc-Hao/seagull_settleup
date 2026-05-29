@@ -2,11 +2,8 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { GroupSelectorOption } from '../../types/views';
 import { colors, layout, radii, shadows, spacing, typography } from '../../theme';
-import { createLogger } from '../../utils/logger';
 import { Icon } from '../Icon';
 import { PrimaryButton } from '../PrimaryButton';
-
-const logger = createLogger('GroupSelector');
 
 export function GroupSelector({
   groups,
@@ -27,13 +24,6 @@ export function GroupSelector({
   onRetry?: () => void;
   onCreateGroup?: () => void;
 }) {
-  logger.debug('GroupSelector render', {
-    groupsCount: groups.length,
-    loading: Boolean(loading),
-    initialLoading: Boolean(initialLoading),
-    hasError: Boolean(error),
-  });
-
   const showInitialLoading = Boolean(initialLoading);
   const isEmpty = !showInitialLoading && !error && groups.length === 0;
 

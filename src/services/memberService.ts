@@ -362,4 +362,3 @@ export function resolveMemberWithProfile(
   };
 }
 
-export { filterSplitSelectableMembers, isSplitSelectableMember, isPendingParticipant, isActiveRegisteredMember } from '../utils/groupParticipants';

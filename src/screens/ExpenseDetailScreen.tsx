@@ -78,7 +78,6 @@ export function ExpenseDetailScreen({
 
       const hasDisplayUrl = Boolean(cachedReceipt?.displayUrl ?? cachedReceipt?.publicUrl);
       setReceiptLoading(!hasDisplayUrl);
-      logger.info('Expense detail receipt load started', { expenseId, hasCachedReceipt: Boolean(cachedReceipt) });
 
       try {
         const result = await getExpenseDetail(expenseId);
@@ -86,10 +85,6 @@ export function ExpenseDetailScreen({
           return;
         }
         setReceipt(result?.receipt ?? null);
-        logger.info('Expense detail receipt load succeeded', {
-          expenseId,
-          hasReceipt: Boolean(result?.receipt),
-        });
       } catch (error) {
         logger.error('Expense detail receipt load failed', error, { expenseId });
       } finally {
@@ -112,15 +107,9 @@ export function ExpenseDetailScreen({
       : '/(tabs)/expenses';
 
   const openDeleteModal = useCallback(() => {
-    logger.info('Delete expense pressed', {
-      expenseId,
-      groupId: expense?.groupId,
-      type: expense?.type,
-    });
-    logger.info('Delete expense confirmation opened', { expenseId });
     setDeleteError(undefined);
     setShowDeleteModal(true);
-  }, [expense?.groupId, expense?.type, expenseId]);
+  }, [expenseId]);
 
   const handleDeleteConfirm = useCallback(async () => {
     setDeleting(true);

@@ -55,7 +55,6 @@ src/
     OverviewCard.tsx
     PrimaryButton.tsx
     SecondaryButton.tsx
-    QuickActionCard.tsx
     SectionCard.tsx
     SplitGroupCard.tsx
     FormInputCard.tsx

@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 
 import {
@@ -27,10 +27,7 @@ import { useGroups } from '../hooks/useGroups';
 import { useInviteMembers } from '../hooks/useInviteMembers';
 import { colors, layout, spacing, typography } from '../theme';
 import { formatCurrency } from '../utils/currency';
-import { createLogger } from '../utils/logger';
 import { safeBack, navigateAfterScanReceiptSave } from '../utils/navigation';
-
-const logger = createLogger('AddExpenseScreen');
 
 const SECTION_GAP = 20;
 
@@ -44,20 +41,6 @@ export function AddExpenseScreen({ initialGroupId, prefill }: AddExpenseScreenPr
   const form = useAddExpenseForm(initialGroupId, groupsQuery, prefill);
   const inviteForm = useInviteMembers(form.selectedGroupId ?? '');
   const [inviteWarnings, setInviteWarnings] = useState<string[]>([]);
-
-  useEffect(() => {
-    logger.info('AddExpense groups state changed', {
-      groupsCount: groupsQuery.groups.length,
-      initialLoading: groupsQuery.initialLoading,
-      loading: groupsQuery.loading,
-      hasSelectedGroup: Boolean(form.selectedGroup),
-    });
-  }, [
-    form.selectedGroup,
-    groupsQuery.groups.length,
-    groupsQuery.initialLoading,
-    groupsQuery.loading,
-  ]);
 
   const showSplitFields = form.kind === 'split' && Boolean(form.selectedGroupId);
 

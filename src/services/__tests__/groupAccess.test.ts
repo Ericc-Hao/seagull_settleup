@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { setCachedUserId } from '../../lib/auth';
+import { setCache } from '../../lib/dataCache';
 import type { DatabaseSnapshot } from '../../storage/types';
 import type { Group, GroupMember } from '../../types/models';
 import {
   getAccessibleGroupsForUser,
+  isActiveGroupStatus,
   isActiveMembership,
+  isGroupActiveForNewExpenses,
+  isGroupInactive,
+  canMutateGroup,
+  getGroupCardStatusLabel,
+  INACTIVE_GROUP_EXPENSE_MESSAGE,
+  INACTIVE_GROUP_MUTATION_MESSAGE,
   userHasGroupAccess,
 } from '../groupAccess';
+import { getExpenseSelectableGroupOptions } from '../groupService';
 
 function group(overrides: Partial<Group> & Pick<Group, 'id'>): Group {
   return {
@@ -94,5 +104,50 @@ describe('groupAccess', () => {
 
     expect(isActiveMembership(db.groupMembers[0])).toBe(false);
     expect(getAccessibleGroupsForUser('user-b', db)).toEqual([]);
+  });
+
+  it('treats inactive status as not active for new expenses', () => {
+    const active = group({ id: 'group-active', status: 'active' });
+    const inactive = group({ id: 'group-inactive', status: 'inactive' });
+
+    expect(isActiveGroupStatus('active')).toBe(true);
+    expect(isActiveGroupStatus('planning')).toBe(true);
+    expect(isActiveGroupStatus('inactive')).toBe(false);
+    expect(isGroupInactive(inactive)).toBe(true);
+    expect(isGroupInactive(active)).toBe(false);
+    expect(isGroupActiveForNewExpenses(active)).toBe(true);
+    expect(isGroupActiveForNewExpenses(inactive)).toBe(false);
+    expect(INACTIVE_GROUP_EXPENSE_MESSAGE).toContain('inactive');
+  });
+
+  it('excludes inactive groups from expense selectors but keeps them accessible', () => {
+    const db = snapshot({
+      groups: [
+        group({ id: 'group-active', ownerId: 'user-a', status: 'active' }),
+        group({ id: 'group-inactive', ownerId: 'user-a', status: 'inactive' }),
+      ],
+      groupMembers: [],
+    });
+    setCache(db);
+    setCachedUserId('user-a');
+
+    expect(getAccessibleGroupsForUser('user-a', db).map((entry) => entry.id).sort()).toEqual([
+      'group-active',
+      'group-inactive',
+    ]);
+    expect(getExpenseSelectableGroupOptions('user-a').map((entry) => entry.id)).toEqual(['group-active']);
+  });
+
+  it('canMutateGroup returns false when group is inactive', () => {
+    expect(canMutateGroup(group({ id: 'group-inactive', status: 'inactive' }))).toBe(false);
+    expect(canMutateGroup(group({ id: 'group-active', status: 'active' }))).toBe(true);
+    expect(canMutateGroup(group({ id: 'group-planning', status: 'planning' }))).toBe(true);
+  });
+
+  it('getGroupCardStatusLabel maps group status to card badge text', () => {
+    expect(getGroupCardStatusLabel('inactive')).toBe('Inactive');
+    expect(getGroupCardStatusLabel('ready_to_settle')).toBe('Not Settled');
+    expect(getGroupCardStatusLabel('active')).toBe('Active');
+    expect(getGroupCardStatusLabel('planning')).toBe('Active');
   });
 });

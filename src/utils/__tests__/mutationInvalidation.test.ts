@@ -163,13 +163,14 @@ describe('mutationInvalidation', () => {
     ]);
   });
 
-  it('set group inactive invalidates groups, home, and group_detail', () => {
+  it('set group inactive invalidates groups, home, group_detail, and expenses', () => {
     const { invalidate, calls } = createInvalidateRecorder();
     invalidateAfterSetGroupInactive(invalidate, 'group-e');
     expect(calls).toEqual([
       { type: 'groups', payload: { groupId: 'group-e' } },
       { type: 'home' },
       { type: 'group_detail', payload: { groupId: 'group-e' } },
+      { type: 'expenses', payload: { groupId: 'group-e' } },
     ]);
   });
 

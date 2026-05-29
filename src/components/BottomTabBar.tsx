@@ -4,10 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors, shadows, typography } from '../theme';
 import { createShadowStyle } from '../theme/shadow-utils';
-import { createLogger } from '../utils/logger';
 import { Icon, IconName } from './Icon';
-
-const logger = createLogger('BottomTabBar');
 
 const tabBarShadow = createShadowStyle({
   color: '#7B82F5',
@@ -59,10 +56,7 @@ export function BottomTabBar({ state, navigation }: BottomTabBarProps) {
 
           <View style={styles.tabSlot}>
             <Pressable
-              onPress={() => {
-                logger.info('Bottom tab plus pressed', { target: 'AddExpense' });
-                router.push('/add-expense');
-              }}
+              onPress={() => router.push('/add-expense')}
               accessibilityRole="button"
               accessibilityLabel="Add Expense"
               style={({ pressed }) => [

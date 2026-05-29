@@ -7,11 +7,12 @@ import type { CategoryKey } from '../constants/categories';
 import type { SplitPreviewRow } from '../components/expenses/SplitPreviewCard';
 import { getCachedCategories } from '../services/categoryService';
 import { createPersonalExpense, createSplitExpense } from '../services/expenseService';
-import { getCurrentUserId, getGroupById } from '../services/groupService';
+import {
+  getCurrentUserId,
+  getGroupById,
+} from '../services/groupService';
 import type { ExpenseType, SplitMethod } from '../types/models';
-import type { CurrencyCode } from '../types/currency';
 import { normalizeCurrencyCode } from '../types/currency';
-import type { ReceiptConversionMetadata } from '../types/inputs';
 import type { GroupSelectorOption } from '../types/views';
 import { getCategoryPickerOptions, resolveCategoryForSave } from '../utils/category';
 import { isoNow } from '../utils/date';
@@ -21,7 +22,6 @@ import {
   invalidateAfterCreatePersonalExpense,
   invalidateAfterCreateSplitExpense,
 } from '../utils/mutationInvalidation';
-import { addCents, splitAmountEvenly } from '../utils/money';
 import {
   formatAmountInputValue,
   parseAmountInput,
@@ -31,6 +31,29 @@ import { getProfile } from '../services/profileService';
 
 import { isSplitSelectableMember } from '../utils/groupParticipants';
 import { useGroupParticipants } from './useGroupParticipants';
+import {
+  getInactiveGroupExpenseMessage,
+  isGroupInactiveForNewExpenses,
+  validateAddExpenseForm,
+} from './addExpense/addExpenseValidation';
+import {
+  type AddExpensePrefill,
+  normalizeInitialAmountText,
+  normalizeInitialExpenseKind,
+  normalizeInitialReceiptUri,
+  normalizeReceiptConversion,
+} from './addExpense/addExpensePrefill';
+import {
+  buildEqualCustomAmountInputs,
+  computeCustomAssignedTotal,
+  computeEqualSplitShares,
+  computeFillRemainingAmountCents,
+  isCustomSplitTotalValid,
+  parseCustomShareCentsByMember,
+  shouldAutoFillCustomSplit,
+} from './addExpense/splitAmountHelpers';
+
+export type { AddExpensePrefill };
 
 export interface UseGroupsResult {
   groups: GroupSelectorOption[];
@@ -44,19 +67,6 @@ export interface UseGroupsResult {
 
 const logger = createLogger('useAddExpenseForm');
 
-export interface AddExpensePrefill {
-  source?: string;
-  amountCents?: number;
-  currency?: CurrencyCode;
-  receiptUri?: string;
-  expenseType?: ExpenseType;
-  originalAmountMinor?: number;
-  originalCurrency?: CurrencyCode;
-  exchangeRate?: number;
-  exchangeRateTimestamp?: string;
-  exchangeRateProvider?: string;
-}
-
 export function useAddExpenseForm(
   initialGroupId: string | undefined,
   groupsQuery: UseGroupsResult,
@@ -66,20 +76,9 @@ export function useAddExpenseForm(
   const userId = getCurrentUserId();
   const profile = getProfile();
   const defaultCurrency = normalizeCurrencyCode(prefill?.currency ?? profile?.defaultCurrency);
-  const receiptConversion: ReceiptConversionMetadata | undefined =
-    prefill?.originalAmountMinor && prefill.originalCurrency
-      ? {
-          originalAmountMinor: prefill.originalAmountMinor,
-          originalCurrency: prefill.originalCurrency,
-          convertedAmountMinor: prefill.amountCents,
-          convertedCurrency: defaultCurrency,
-          exchangeRate: prefill.exchangeRate,
-          exchangeRateTimestamp: prefill.exchangeRateTimestamp,
-          exchangeRateProvider: prefill.exchangeRateProvider,
-        }
-      : undefined;
+  const receiptConversion = normalizeReceiptConversion(prefill, defaultCurrency);
 
-  const [kind, setKind] = useState<ExpenseType>(prefill?.expenseType ?? 'split');
+  const [kind, setKind] = useState<ExpenseType>(() => normalizeInitialExpenseKind(prefill));
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(initialGroupId);
   const participantGroupId = kind === 'split' ? selectedGroupId : undefined;
   const {
@@ -89,10 +88,8 @@ export function useAddExpenseForm(
     refresh: refreshMembers,
   } = useGroupParticipants(participantGroupId, 'split');
 
-  const [amountText, setAmountText] = useState(
-    prefill?.amountCents && prefill.amountCents > 0
-      ? formatAmountInputValue(prefill.amountCents, defaultCurrency)
-      : '',
+  const [amountText, setAmountText] = useState(() =>
+    normalizeInitialAmountText(prefill, defaultCurrency),
   );
   const [categoryKey, setCategoryKey] = useState<CategoryKey | ''>('');
   const [payerMemberId, setPayerMemberId] = useState('');
@@ -100,7 +97,9 @@ export function useAddExpenseForm(
   const [splitMethod, setSplitMethod] = useState<SplitMethod>('equal');
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
   const [note, setNote] = useState('');
-  const [receiptUri, setReceiptUri] = useState<string | undefined>(prefill?.receiptUri);
+  const [receiptUri, setReceiptUri] = useState<string | undefined>(() =>
+    normalizeInitialReceiptUri(prefill),
+  );
 
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
@@ -138,16 +137,24 @@ export function useAddExpenseForm(
 
   const selectedGroupRecord = selectedGroupId ? getGroupById(selectedGroupId) : undefined;
   const isOwner = selectedGroupRecord?.ownerId === userId;
-
-  useEffect(() => {
-    logger.info('Add expense screen opened', { initialGroupId, source: prefill?.source });
-  }, [initialGroupId, prefill?.source]);
+  const selectedGroupInactive = isGroupInactiveForNewExpenses(selectedGroupRecord);
 
   useEffect(() => {
     if (initialGroupId) {
       setSelectedGroupId(initialGroupId);
     }
   }, [initialGroupId]);
+
+  useEffect(() => {
+    if (!selectedGroupId || kind !== 'split') {
+      return;
+    }
+    const group = getGroupById(selectedGroupId);
+    if (isGroupInactiveForNewExpenses(group)) {
+      setSelectedGroupId(undefined);
+      setSubmitError(getInactiveGroupExpenseMessage());
+    }
+  }, [kind, selectedGroupId, versions.groups]);
 
   useEffect(() => {
     if (kind !== 'split' || members.length === 0) {
@@ -176,7 +183,6 @@ export function useAddExpenseForm(
   }, [kind, members, userId]);
 
   const selectGroup = useCallback((groupId: string) => {
-    logger.info('Group selected for expense', { groupId });
     setSelectedGroupId(groupId);
     setSubmitError(undefined);
   }, []);
@@ -185,21 +191,15 @@ export function useAddExpenseForm(
     setAmountText(sanitizeAmountInput(value, defaultCurrency));
   }, [defaultCurrency]);
 
-  const equalShares = useMemo(() => {
-    if (splitMemberIds.length === 0 || amountCents <= 0) {
-      return [] as number[];
-    }
-    return splitAmountEvenly(amountCents, splitMemberIds.length);
-  }, [amountCents, defaultCurrency, splitMemberIds]);
+  const equalShares = useMemo(
+    () => computeEqualSplitShares(amountCents, splitMemberIds.length),
+    [amountCents, splitMemberIds.length],
+  );
 
-  const customShareCentsByMember = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const memberId of splitMemberIds) {
-      const raw = customAmounts[memberId] ?? '';
-      map[memberId] = parseAmountInput(raw, defaultCurrency);
-    }
-    return map;
-  }, [customAmounts, defaultCurrency, splitMemberIds]);
+  const customShareCentsByMember = useMemo(
+    () => parseCustomShareCentsByMember(splitMemberIds, customAmounts, defaultCurrency),
+    [customAmounts, defaultCurrency, splitMemberIds],
+  );
 
   const previewRows: SplitPreviewRow[] = useMemo(() => {
     return splitMemberIds
@@ -218,35 +218,37 @@ export function useAddExpenseForm(
   }, [customShareCentsByMember, equalShares, members, splitMemberIds, splitMethod]);
 
   const customAssignedTotal = useMemo(
-    () => addCents(splitMemberIds.map((id) => customShareCentsByMember[id] ?? 0)),
+    () => computeCustomAssignedTotal(splitMemberIds, customShareCentsByMember),
     [customShareCentsByMember, splitMemberIds],
   );
 
-  const customSplitValid = splitMethod !== 'custom' || (amountCents > 0 && customAssignedTotal === amountCents);
+  const customSplitValid = isCustomSplitTotalValid(splitMethod, amountCents, customAssignedTotal);
 
-  const validationError = useMemo(() => {
-    if (amountCents <= 0) {
-      return 'Please enter an amount.';
-    }
-    if (kind === 'split') {
-      if (!selectedGroupId) {
-        return 'Please select a group.';
-      }
-      if (!payerMemberId) {
-        return 'Please choose who paid.';
-      }
-      if (splitMemberIds.length === 0) {
-        return 'Please choose at least one person to split with.';
-      }
-      if (!customSplitValid) {
-        return 'Custom split total must equal the expense amount.';
-      }
-    }
-    if (!categoryKey) {
-      return 'Please select a category.';
-    }
-    return undefined;
-  }, [amountCents, categoryKey, customSplitValid, kind, payerMemberId, selectedGroupId, splitMemberIds.length]);
+  const validationError = useMemo(
+    () =>
+      validateAddExpenseForm({
+        amountCents,
+        kind,
+        selectedGroupId,
+        selectedGroupInactive,
+        payerMemberId,
+        splitMemberIds,
+        splitMethod,
+        customAssignedTotal,
+        categoryKey,
+      }),
+    [
+      amountCents,
+      categoryKey,
+      customAssignedTotal,
+      kind,
+      payerMemberId,
+      selectedGroupId,
+      selectedGroupInactive,
+      splitMemberIds,
+      splitMethod,
+    ],
+  );
 
   const canSave = !saving && !validationError;
 
@@ -254,10 +256,11 @@ export function useAddExpenseForm(
     if (splitMemberIds.length === 0) {
       return;
     }
-    const assigned = addCents(
-      splitMemberIds.slice(0, -1).map((id) => customShareCentsByMember[id] ?? 0),
+    const remaining = computeFillRemainingAmountCents(
+      splitMemberIds,
+      customShareCentsByMember,
+      amountCents,
     );
-    const remaining = Math.max(0, amountCents - assigned);
     const lastId = splitMemberIds[splitMemberIds.length - 1];
     setCustomAmounts((current) => ({
       ...current,
@@ -266,23 +269,12 @@ export function useAddExpenseForm(
   }, [amountCents, customShareCentsByMember, defaultCurrency, splitMemberIds]);
 
   const resetEqualCustom = useCallback(() => {
-    if (splitMemberIds.length === 0 || amountCents <= 0) {
-      return;
-    }
-    const shares = splitAmountEvenly(amountCents, splitMemberIds.length);
-    const next: Record<string, string> = {};
-    splitMemberIds.forEach((id, index) => {
-      next[id] = formatAmountInputValue(shares[index] ?? 0, defaultCurrency);
-    });
-    setCustomAmounts(next);
+    setCustomAmounts(buildEqualCustomAmountInputs(splitMemberIds, amountCents, defaultCurrency));
   }, [amountCents, defaultCurrency, splitMemberIds]);
 
   useEffect(() => {
-    if (splitMethod === 'custom' && amountCents > 0) {
-      const allEmpty = splitMemberIds.every((id) => !(customAmounts[id] ?? '').trim());
-      if (allEmpty) {
-        resetEqualCustom();
-      }
+    if (shouldAutoFillCustomSplit(splitMethod, amountCents, splitMemberIds, customAmounts)) {
+      resetEqualCustom();
     }
   }, [splitMethod, amountCents, splitMemberIds, customAmounts, resetEqualCustom]);
 
@@ -300,7 +292,6 @@ export function useAddExpenseForm(
 
     try {
       if (kind === 'personal') {
-        logger.info('Create personal expense started');
         await createPersonalExpense({
           amountCents,
           currency: defaultCurrency,
@@ -312,7 +303,6 @@ export function useAddExpenseForm(
           receiptLocalUri: receiptUri,
           receiptConversion,
         });
-        logger.info('Create personal expense succeeded');
       } else {
         const splits =
           splitMethod === 'equal'
@@ -325,7 +315,6 @@ export function useAddExpenseForm(
                 shareAmountCents: customShareCentsByMember[memberId] ?? 0,
               }));
 
-        logger.info('Create split expense started', { groupId: selectedGroupId, splitCount: splits.length });
         await createSplitExpense({
           groupId: selectedGroupId!,
           payerMemberId,
@@ -341,7 +330,6 @@ export function useAddExpenseForm(
           receiptLocalUri: receiptUri,
           receiptConversion,
         });
-        logger.info('Create split expense succeeded', { groupId: selectedGroupId });
       }
 
       if (kind === 'personal') {
@@ -397,15 +385,9 @@ export function useAddExpenseForm(
     activeMembers: selectableMembers,
     payerMembers,
     payerMemberId,
-    setPayerMemberId: (id: string) => {
-      logger.info('Payer selected', { payerMemberId: id });
-      setPayerMemberId(id);
-    },
+    setPayerMemberId,
     splitMemberIds,
-    setSplitMemberIds: (ids: string[]) => {
-      logger.info('Split participants changed', { count: ids.length });
-      setSplitMemberIds(ids);
-    },
+    setSplitMemberIds,
     showSplitModal,
     setShowSplitModal,
     showInviteModal,

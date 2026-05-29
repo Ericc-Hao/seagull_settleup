@@ -237,21 +237,20 @@ When adding new migrations, use version timestamps after the latest applied remo
 Supported auth:
 
 - email/password
-- forgot password
-- Google OAuth
+- forgot password / reset password
 
-Google OAuth:
+Public email and recovery links use helpers in `src/lib/publicUrls.ts` and `supabase/functions/_shared/appUrls.ts`:
 
-- web callback: `https://split.seagullcoffee.ca/auth/callback`
-- native callback: `seagullsplit://auth/callback`
-- app scheme: `seagullsplit`
+- `getPasswordResetUrl()`
+- `getInvitationUrl(token)`
+- `getPublicWebBaseUrl()` / `getPublicAppUrl()`
 
-After Google login, call `ensureProfileExists()`.
-Create/update `public.profiles` from auth metadata:
+Do not hardcode production URLs in app or Edge Function code.
 
-- `display_name` from `full_name` / `name`
+After sign-up or login, call `ensureProfileExists()` to create/update `public.profiles`:
+
+- `display_name` from registration input or auth metadata
 - `email` from `user.email`
-- `avatar_url` from `avatar_url` / `picture`
 - `default_currency = CAD`
 
 Auth errors:
@@ -286,7 +285,6 @@ Services must not call:
 
 - `refreshCache`
 - `setCache`
-- `cacheEvents`
 - `invalidate` directly
 
 Hooks/screens call `invalidate(...)` after successful mutations.
@@ -463,23 +461,21 @@ Required Supabase Dashboard → Authentication → URL Configuration:
 - Redirect URLs:
   - `https://split.seagullcoffee.ca/reset-password`
   - `https://split.seagullcoffee.ca/register`
-  - `https://split.seagullcoffee.ca/auth/callback`
-  - `seagullsplit://auth/callback` (native OAuth only — not for email links)
 
 ## iOS Universal Links (email deep links)
 
 Email links use HTTPS Universal Links with automatic web fallback. Do **not** use `seagullsplit://` links in emails.
 
-| Flow | URL |
-|------|-----|
-| Password reset | `https://split.seagullcoffee.ca/reset-password?token_hash=...&type=recovery` |
-| Invitation | `https://split.seagullcoffee.ca/register?invite={token}` |
+| Flow | URL helper |
+|------|------------|
+| Password reset | `getPasswordResetUrl()` + `token_hash` and `type=recovery` query params |
+| Invitation | `getInvitationUrl(token)` |
 
 iOS app (`app.json`):
 
 - `ios.associatedDomains`: `applinks:split.seagullcoffee.ca`
 - `ios.bundleIdentifier`: `com.seagullsplit.app`
-- `scheme`: `seagullsplit` (OAuth callbacks only)
+- `scheme`: `seagullsplit` (native deep links only — not for email)
 
 Required hosted files (GitHub Pages):
 
@@ -549,7 +545,6 @@ Expected errors should use `logger.warn` / `logger.info`, not `logger.error` if 
 Examples of expected errors:
 
 - invalid login credentials
-- OAuth cancelled
 - OCR no amount detected
 - invalid refresh token
 - missing scan receipt config
@@ -602,8 +597,7 @@ For auth changes:
 - wrong password
 - register validation
 - forgot password
-- Google OAuth web
-- Google OAuth iOS
+- reset password link
 - logout
 - stale session
 

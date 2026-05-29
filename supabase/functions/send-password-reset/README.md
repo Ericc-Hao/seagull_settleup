@@ -56,8 +56,6 @@ Authentication → URL Configuration:
 - Redirect URLs:
   - `https://split.seagullcoffee.ca/reset-password`
   - `https://split.seagullcoffee.ca/register`
-  - `https://split.seagullcoffee.ca/auth/callback`
-  - `seagullsplit://auth/callback` (native OAuth only — not for email links)
 
 Authentication → Providers → Email → **Email OTP Expiration**:
 

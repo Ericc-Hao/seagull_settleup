@@ -12,16 +12,14 @@ import {
   InviteMembersModal,
   MemberActionSheet,
   SetInactiveModal,
+  ReactivateGroupModal,
 } from '../components/groups';
 import { useGroupDetail } from '../hooks/useGroupDetail';
 import { useGroupMemberActions } from '../hooks/useGroupMemberActions';
 import { useInviteMembers } from '../hooks/useInviteMembers';
 import type { GroupMemberWithProfile } from '../types/views';
 import { colors, layout, spacing, typography } from '../theme';
-import { createLogger } from '../utils/logger';
 import { safeBack } from '../utils/navigation';
-
-const logger = createLogger('GroupDetailScreen');
 
 interface GroupDetailScreenProps {
   groupId: string;
@@ -34,18 +32,17 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showInactiveModal, setShowInactiveModal] = useState(false);
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<GroupMemberWithProfile | null>(null);
 
   const actionError = detail.actionError ?? memberActions.actionError;
 
   const openSettings = () => {
-    logger.info('Open group settings', { groupId });
     setShowSettings(true);
   };
 
   const openMemberSheet = (member: GroupMemberWithProfile) => {
-    logger.info('Open member action sheet', { groupId, memberId: member.id });
     memberActions.clearActionError();
     setSelectedMember(member);
   };
@@ -116,14 +113,14 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
                 members={detail.members}
                 onPressMember={openMemberSheet}
                 onPressInvite={
-                  detail.isOwner
+                  detail.isOwner && !detail.isInactive
                     ? () => {
                         setShowSettings(false);
                         setShowInviteModal(true);
                       }
                     : undefined
                 }
-                showInviteButton={detail.isOwner}
+                showInviteButton={detail.isOwner && !detail.isInactive}
               />
               {detail.membersRefreshing ? (
                 <Text style={[typography.caption, { color: colors.textTertiary, marginTop: spacing.xs }]}>
@@ -146,30 +143,36 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
           <Text style={[typography.title, { fontSize: 28 }]}>{detail.totalSpentLabel}</Text>
           <Text style={[typography.caption, { color: colors.textSecondary }]}>Total spent in this group</Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
-            <View style={{ flex: 1 }}>
-              <PrimaryButton
-                label="Add Expense"
-                onPress={() => router.push(`/add-expense?groupId=${groupId}`)}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <PrimaryButton
-                label="Settle Up"
-                onPress={() => router.push(`/group/${groupId}/settle-up`)}
-              />
-            </View>
+            {!detail.isInactive ? (
+              <>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton
+                    label="Add Expense"
+                    onPress={() => router.push(`/add-expense?groupId=${groupId}`)}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <PrimaryButton
+                    label="Settle Up"
+                    onPress={() => router.push(`/group/${groupId}/settle-up`)}
+                  />
+                </View>
+              </>
+            ) : null}
           </View>
         </View>
 
         <GroupRecentExpenses
           expenses={detail.recentExpenses}
           groupId={groupId}
-          onAddExpense={() => router.push(`/add-expense?groupId=${groupId}`)}
+          onAddExpense={
+            detail.isInactive ? undefined : () => router.push(`/add-expense?groupId=${groupId}`)
+          }
         />
 
         {detail.isInactive ? (
           <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}>
-            This group is inactive and hidden from active groups.
+            This group is inactive. Reactivate it to make changes.
           </Text>
         ) : null}
 
@@ -181,6 +184,7 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
       <GroupSettingsSheet
         visible={showSettings}
         isOwner={detail.isOwner}
+        isInactive={detail.isInactive}
         onClose={() => setShowSettings(false)}
         onManageMembers={() => {
           setShowSettings(false);
@@ -197,6 +201,10 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
         onSetInactive={() => {
           setShowSettings(false);
           setShowInactiveModal(true);
+        }}
+        onReactivate={() => {
+          setShowSettings(false);
+          setShowReactivateModal(true);
         }}
         onDeleteGroup={() => {
           setShowSettings(false);
@@ -292,6 +300,22 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
             })
             .catch(() => {
               setShowInactiveModal(false);
+            });
+        }}
+      />
+
+      <ReactivateGroupModal
+        visible={showReactivateModal}
+        loading={detail.actionLoading}
+        onCancel={() => setShowReactivateModal(false)}
+        onConfirm={() => {
+          void detail
+            .reactivate()
+            .then(() => {
+              setShowReactivateModal(false);
+            })
+            .catch(() => {
+              setShowReactivateModal(false);
             });
         }}
       />

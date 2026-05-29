@@ -1,6 +1,5 @@
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback } from 'react';
 import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 
 import {
@@ -14,31 +13,16 @@ import {
 import { AmountInputCard } from '../components/expenses';
 import { CurrencySelector } from '../components/form';
 import { EXPENSE_TYPE_OPTIONS } from '../data/constants';
-import { getProfile } from '../services/profileService';
-import {
-  convertReceiptAmount,
-  scanReceiptImage,
-  type ReceiptScanResult,
-} from '../services/receiptScanService';
+import { useScanReceiptFlow } from '../hooks/useScanReceiptFlow';
+import type { ReceiptScanResult } from '../services/receiptScanService';
 import { buttons, colors, layout, radii, shadows, spacing, typography } from '../theme';
-import type { CurrencyCode, ExpenseType } from '../types/models';
-import { normalizeCurrencyCode } from '../types/currency';
+import type { CurrencyCode } from '../types/models';
 import {
-  formatAmountInputValue,
   formatCurrency,
   formatExchangeRateLine,
-  parseAmountInput,
-  sanitizeAmountInput,
 } from '../utils/currency';
-import { createLogger } from '../utils/logger';
 import { safeBack } from '../utils/navigation';
-import {
-  RECEIPT_SCAN_MESSAGES,
-  ReceiptScanError,
-} from '../utils/receiptScanErrors';
 import { Icon, type IconName } from '../components/Icon';
-
-const logger = createLogger('ScanReceiptScreen');
 
 function SourceButton({
   icon,
@@ -251,253 +235,48 @@ function ConversionSummary({
   );
 }
 
-function applyConvertedAmount(result: ReceiptScanResult): string {
-  const amountMinor = result.convertedAmountMinor ?? result.detectedAmountMinor;
-  if (!amountMinor || amountMinor <= 0) {
-    return '';
-  }
-  return formatAmountInputValue(amountMinor, result.targetCurrency);
-}
-
 export function ScanReceiptScreen() {
-  const profile = getProfile();
-  const targetCurrency = normalizeCurrencyCode(profile?.defaultCurrency);
-
-  const [receiptUri, setReceiptUri] = useState<string | undefined>();
-  const [amountText, setAmountText] = useState('');
-  const [expenseType, setExpenseType] = useState<ExpenseType>('split');
-  const [scanResult, setScanResult] = useState<ReceiptScanResult | undefined>();
-  const [selectedSourceCurrency, setSelectedSourceCurrency] = useState<CurrencyCode>('USD');
-  const [scanning, setScanning] = useState(false);
-  const [converting, setConverting] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const [notice, setNotice] = useState<string | undefined>();
-  const [showReplaceChooser, setShowReplaceChooser] = useState(false);
-
-  const amountCents = parseAmountInput(amountText, targetCurrency);
-  const requiresCurrencySelection = scanResult?.requiresCurrencySelection ?? false;
-
-  const resetReceiptSelection = useCallback(() => {
-    setReceiptUri(undefined);
-    setScanResult(undefined);
-    setAmountText('');
-    setError(undefined);
-    setNotice(undefined);
-    setShowReplaceChooser(false);
-  }, []);
-
-  const handleScanResult = useCallback((result: ReceiptScanResult) => {
-    setScanResult(result);
-
-    if (result.requiresCurrencySelection) {
-      setNotice(result.noticeMessage ?? RECEIPT_SCAN_MESSAGES.currencyNotDetected);
-      if (result.detectedAmountText && !amountText) {
-        setAmountText('');
-      }
-      return;
-    }
-
-    if (result.conversionFailed) {
-      setNotice(result.noticeMessage ?? RECEIPT_SCAN_MESSAGES.exchangeRateUnavailable);
-      if (result.detectedAmountMinor && result.detectedAmountMinor > 0) {
-        setAmountText(applyConvertedAmount(result));
-      }
-      return;
-    }
-
-    if (result.convertedAmountMinor && result.convertedAmountMinor > 0) {
-      setAmountText(applyConvertedAmount(result));
-      if (result.candidates.length > 1) {
-        setNotice(`${result.candidates.length} total candidate(s) found. Review the amount before continuing.`);
-      } else {
-        setNotice(undefined);
-      }
-      return;
-    }
-
-    if (result.detectedAmountMinor && result.detectedAmountMinor > 0) {
-      setAmountText(formatAmountInputValue(result.detectedAmountMinor, result.targetCurrency));
-      setNotice(RECEIPT_SCAN_MESSAGES.noAmount);
-      return;
-    }
-
-    setNotice(RECEIPT_SCAN_MESSAGES.noAmount);
-  }, [amountText]);
-
-  const scanPickedAsset = useCallback(
-    async (asset: ImagePicker.ImagePickerAsset, options?: { replacing?: boolean }) => {
-      if (options?.replacing) {
-        logger.info('Receipt scan photo replaced');
-      }
-
-      setShowReplaceChooser(false);
-      setReceiptUri(asset.uri);
-      setScanResult(undefined);
-      setError(undefined);
-      setNotice(undefined);
-      setAmountText('');
-
-      if (!asset.base64) {
-        setNotice(RECEIPT_SCAN_MESSAGES.missingImageData);
-        return;
-      }
-
-      setScanning(true);
-      logger.info('Receipt scan image selected', { mimeType: asset.mimeType ?? 'image/jpeg', targetCurrency });
-      try {
-        const result = await scanReceiptImage({
-          imageBase64: asset.base64,
-          mimeType: asset.mimeType,
-          targetCurrency,
-        });
-        handleScanResult(result);
-      } catch (scanError) {
-        const receiptError =
-          scanError instanceof ReceiptScanError
-            ? scanError
-            : new ReceiptScanError(
-                scanError instanceof Error ? scanError.message : RECEIPT_SCAN_MESSAGES.ocrFailed,
-                'ocr_failed',
-              );
-
-        setNotice(receiptError.message);
-      } finally {
-        setScanning(false);
-      }
-    },
-    [handleScanResult, targetCurrency],
-  );
-
-  const handleSourceCurrencyConvert = useCallback(async () => {
-    if (!scanResult?.detectedAmountMinor && !scanResult?.detectedAmountText) {
-      return;
-    }
-
-    setConverting(true);
-    setError(undefined);
-    logger.info('Receipt manual currency conversion started', {
-      sourceCurrency: selectedSourceCurrency,
-      targetCurrency,
-    });
-
-    try {
-      const result = await convertReceiptAmount({
-        amountMinor: scanResult.detectedAmountMinor ?? undefined,
-        detectedAmountText: scanResult.detectedAmountText ?? undefined,
-        sourceCurrency: selectedSourceCurrency,
-        targetCurrency,
-      });
-      handleScanResult(result);
-    } catch (convertError) {
-      const receiptError =
-        convertError instanceof ReceiptScanError
-          ? convertError
-          : new ReceiptScanError(
-              convertError instanceof Error ? convertError.message : RECEIPT_SCAN_MESSAGES.exchangeRateUnavailable,
-              'exchange_rate_unavailable',
-            );
-      setNotice(receiptError.message);
-    } finally {
-      setConverting(false);
-    }
-  }, [handleScanResult, scanResult, selectedSourceCurrency, targetCurrency]);
-
-  const takePhoto = useCallback(
-    async (replacing = false) => {
-      setError(undefined);
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        setError(RECEIPT_SCAN_MESSAGES.cameraPermission);
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 0.85,
-        base64: true,
-      });
-      if (result.canceled) {
-        return;
-      }
-      if (result.assets[0]) {
-        void scanPickedAsset(result.assets[0], { replacing });
-      }
-    },
-    [scanPickedAsset],
-  );
-
-  const uploadImage = useCallback(
-    async (replacing = false) => {
-      setError(undefined);
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setError(RECEIPT_SCAN_MESSAGES.libraryPermission);
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.85,
-        base64: true,
-      });
-      if (result.canceled) {
-        return;
-      }
-      if (result.assets[0]) {
-        void scanPickedAsset(result.assets[0], { replacing });
-      }
-    },
-    [scanPickedAsset],
-  );
-
-  const handleReplacePhotoPress = useCallback(() => {
-    logger.info('Receipt scan replace photo pressed');
-    setShowReplaceChooser(true);
-  }, []);
-
-  const handleRemovePhoto = useCallback(() => {
-    logger.info('Receipt scan remove photo pressed');
-    resetReceiptSelection();
-    logger.info('Receipt scan photo removed');
-  }, [resetReceiptSelection]);
-
-  const receiptConversionParams = useMemo(() => {
-    if (!scanResult?.detectedAmountMinor) {
-      return {};
-    }
-
-    return {
-      originalAmountMinor: String(scanResult.detectedAmountMinor),
-      originalCurrency: scanResult.detectedCurrency ?? selectedSourceCurrency,
-      ...(scanResult.exchangeRate ? { exchangeRate: String(scanResult.exchangeRate) } : {}),
-      ...(scanResult.exchangeRateTimestamp ? { exchangeRateTimestamp: scanResult.exchangeRateTimestamp } : {}),
-      ...(scanResult.exchangeRateProvider ? { exchangeRateProvider: scanResult.exchangeRateProvider } : {}),
-    };
-  }, [scanResult, selectedSourceCurrency]);
+  const {
+    targetCurrency,
+    receiptUri,
+    amountText,
+    amountCents,
+    expenseType,
+    setExpenseType,
+    scanResult,
+    selectedSourceCurrency,
+    setSelectedSourceCurrency,
+    scanning,
+    converting,
+    error,
+    setError,
+    notice,
+    showReplaceChooser,
+    requiresCurrencySelection,
+    canContinue,
+    takePhoto,
+    uploadImage,
+    handleReplacePhotoPress,
+    handleRemovePhoto,
+    handleSourceCurrencyConvert,
+    onAmountChange,
+    validateContinue,
+    buildAddExpenseParams,
+  } = useScanReceiptFlow();
 
   const continueToAddExpense = useCallback(() => {
-    if (amountCents <= 0) {
-      setError(RECEIPT_SCAN_MESSAGES.amountRequired);
+    const validationError = validateContinue();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
     setError(undefined);
-    logger.info('Receipt scan continue pressed', {
-      expenseType,
-      amountCents,
-      currency: targetCurrency,
-      hasReceipt: Boolean(receiptUri),
-    });
     router.push({
       pathname: '/add-expense',
-      params: {
-        source: 'scan_receipt',
-        amountCents: String(amountCents),
-        currency: targetCurrency,
-        ...(receiptUri ? { receiptUri } : {}),
-        expenseType,
-        ...receiptConversionParams,
-      },
+      params: buildAddExpenseParams(),
     });
-  }, [amountCents, expenseType, receiptConversionParams, receiptUri, targetCurrency]);
+  }, [buildAddExpenseParams, setError, validateContinue]);
 
   return (
     <ScreenLayout
@@ -528,7 +307,7 @@ export function ScanReceiptScreen() {
             <PrimaryButton
               label="Continue"
               onPress={continueToAddExpense}
-              disabled={amountCents <= 0 || scanning || converting || (requiresCurrencySelection && !amountText)}
+              disabled={!canContinue}
             />
           </View>
         ) : null
@@ -564,8 +343,8 @@ export function ScanReceiptScreen() {
               <ReceiptSourceCard
                 disabled={scanning || converting}
                 label="Choose a new photo"
-                onTakePhoto={() => void takePhoto(true)}
-                onUploadImage={() => void uploadImage(true)}
+                onTakePhoto={() => void takePhoto()}
+                onUploadImage={() => void uploadImage()}
               />
             ) : null}
 
@@ -594,15 +373,7 @@ export function ScanReceiptScreen() {
                 amountCents={amountCents}
                 amountText={amountText}
                 currency={targetCurrency}
-                onChangeAmountText={(value) => {
-                  setAmountText(sanitizeAmountInput(value, targetCurrency));
-                  if (error) {
-                    setError(undefined);
-                  }
-                  if (notice === RECEIPT_SCAN_MESSAGES.noAmount) {
-                    setNotice(undefined);
-                  }
-                }}
+                onChangeAmountText={onAmountChange}
                 error={amountText && amountCents <= 0 ? 'Please enter a valid amount.' : undefined}
               />
             </FormSection>

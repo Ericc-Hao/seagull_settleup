@@ -1,6 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 
 import { clearCachedUserId, setCachedUserId } from '../lib/auth';
+import { getPublicWebBaseUrl } from '../lib/publicUrls';
 import { resetAppDataCache } from '../context/appDataBridge';
 import { clearSupabaseAuthStorage } from '../lib/authStorage';
 import { supabase } from '../lib/supabase';
@@ -78,7 +79,7 @@ function readRecoveryUrlParams(url?: string): URLSearchParams | null {
   try {
     const parsed = new URL(
       targetUrl,
-      typeof window !== 'undefined' ? window.location.origin : 'https://split.seagullcoffee.ca',
+      typeof window !== 'undefined' ? window.location.origin : getPublicWebBaseUrl(),
     );
     const params = new URLSearchParams(parsed.search);
     if (parsed.hash.startsWith('#')) {

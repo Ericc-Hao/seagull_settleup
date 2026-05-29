@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildGroupInvitationEmail } from '../_shared/emailTemplates.ts';
+import { getInvitationUrl } from '../_shared/appUrls.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,9 +42,7 @@ function buildInviterNameOrEmail(
 }
 
 function buildInviteLink(token: string): string {
-  const publicAppUrl = Deno.env.get('PUBLIC_APP_URL') ?? 'https://split.seagullcoffee.ca';
-  const normalizedBase = publicAppUrl.endsWith('/') ? publicAppUrl.slice(0, -1) : publicAppUrl;
-  return `${normalizedBase}/register?invite=${encodeURIComponent(token)}`;
+  return getInvitationUrl(token);
 }
 
 async function resolveInviteeHasAccount(

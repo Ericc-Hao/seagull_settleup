@@ -1,3 +1,7 @@
+/**
+ * Receipt amount parser (Edge Function runtime source of truth).
+ * Keep logic in sync with: src/utils/parseReceiptAmount.ts
+ */
 export interface ReceiptAmountCandidate {
   label: string;
   amountCents: number;

@@ -178,6 +178,13 @@ export interface ExpenseReceiptView {
   fileSize?: number;
   ocrStatus?: 'none' | 'pending' | 'completed' | 'failed';
   ocrText?: string;
+  originalAmountMinor?: number;
+  originalCurrency?: string;
+  convertedAmountMinor?: number;
+  convertedCurrency?: string;
+  exchangeRate?: number;
+  exchangeRateProvider?: string;
+  exchangeRateTimestamp?: string;
 }
 
 export interface ExpenseListItemView {

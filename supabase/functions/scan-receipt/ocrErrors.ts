@@ -7,6 +7,9 @@ export type OcrErrorCode =
   | 'OPENAI_QUOTA_EXCEEDED'
   | 'OPENAI_BAD_REQUEST'
   | 'NO_AMOUNT_DETECTED'
+  | 'CURRENCY_NOT_DETECTED'
+  | 'EXCHANGE_RATE_UNAVAILABLE'
+  | 'UNSUPPORTED_CURRENCY'
   | 'INVALID_IMAGE'
   | 'REQUEST_BODY_INVALID'
   | 'UNKNOWN_OCR_ERROR';
@@ -41,6 +44,12 @@ export function userMessageForOcrError(code: OcrErrorCode): string {
       return 'We could not read the receipt result. Please enter the amount manually.';
     case 'NO_AMOUNT_DETECTED':
       return 'We could not detect the total. Please enter the amount manually.';
+    case 'CURRENCY_NOT_DETECTED':
+      return 'We detected the amount, but not the currency. Please select the receipt currency.';
+    case 'EXCHANGE_RATE_UNAVAILABLE':
+      return 'Could not fetch the exchange rate. Please enter the amount manually.';
+    case 'UNSUPPORTED_CURRENCY':
+      return 'This currency is not supported yet. Please enter the amount manually.';
     case 'INVALID_IMAGE':
       return 'Could not read the receipt image. Please try another image.';
     case 'REQUEST_BODY_INVALID':
@@ -68,7 +77,11 @@ export function httpStatusForOcrError(code: OcrErrorCode): number {
     case 'INVALID_IMAGE':
       return 400;
     case 'NO_AMOUNT_DETECTED':
+    case 'CURRENCY_NOT_DETECTED':
       return 200;
+    case 'EXCHANGE_RATE_UNAVAILABLE':
+    case 'UNSUPPORTED_CURRENCY':
+      return 502;
     case 'UNKNOWN_OCR_ERROR':
     default:
       return 500;

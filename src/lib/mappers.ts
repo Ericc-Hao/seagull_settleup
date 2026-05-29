@@ -247,6 +247,13 @@ export function mapReceipt(row: ReceiptRow): Receipt {
     fileSize: row.file_size ?? undefined,
     ocrStatus: row.ocr_status,
     ocrText: row.ocr_text ?? undefined,
+    originalAmountMinor: row.original_amount_minor ?? undefined,
+    originalCurrency: (row.original_currency as CurrencyCode) ?? undefined,
+    convertedAmountMinor: row.converted_amount_minor ?? undefined,
+    convertedCurrency: (row.converted_currency as CurrencyCode) ?? undefined,
+    exchangeRate: row.exchange_rate ?? undefined,
+    exchangeRateProvider: row.exchange_rate_provider ?? undefined,
+    exchangeRateTimestamp: row.exchange_rate_timestamp ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -21,6 +21,12 @@ export const RECEIPT_SCAN_MESSAGES = {
   libraryPermission: 'Photo library permission is required to upload a receipt image.',
   missingImageData: 'Receipt scanning failed. Please try again or enter the amount manually.',
   amountRequired: 'Please enter an amount before continuing.',
+  currencyNotDetected:
+    'We detected the amount, but not the currency. Please select the receipt currency.',
+  exchangeRateUnavailable:
+    'Could not fetch the exchange rate. Please enter the amount manually.',
+  unsupportedCurrency:
+    'This currency is not supported yet. Please enter the amount manually.',
 } as const;
 
 export type ReceiptScanErrorCode =
@@ -37,7 +43,10 @@ export type ReceiptScanErrorCode =
   | 'missing_image'
   | 'no_amount'
   | 'permission_denied'
-  | 'missing_image_data';
+  | 'missing_image_data'
+  | 'currency_not_detected'
+  | 'exchange_rate_unavailable'
+  | 'unsupported_currency';
 
 export class ReceiptScanError extends Error {
   readonly code: ReceiptScanErrorCode;
@@ -72,6 +81,9 @@ const EXPECTED_CODES = new Set<ReceiptScanErrorCode>([
   'no_amount',
   'permission_denied',
   'missing_image_data',
+  'currency_not_detected',
+  'exchange_rate_unavailable',
+  'unsupported_currency',
 ]);
 
 export function mapReceiptScanServerErrorCode(
@@ -107,6 +119,24 @@ export function mapReceiptScanServerErrorCode(
       return new ReceiptScanError(message ?? RECEIPT_SCAN_MESSAGES.missingImage, 'missing_image', meta);
     case 'NO_AMOUNT_DETECTED':
       return new ReceiptScanError(message ?? RECEIPT_SCAN_MESSAGES.noAmount, 'no_amount', meta);
+    case 'CURRENCY_NOT_DETECTED':
+      return new ReceiptScanError(
+        message ?? RECEIPT_SCAN_MESSAGES.currencyNotDetected,
+        'currency_not_detected',
+        meta,
+      );
+    case 'EXCHANGE_RATE_UNAVAILABLE':
+      return new ReceiptScanError(
+        message ?? RECEIPT_SCAN_MESSAGES.exchangeRateUnavailable,
+        'exchange_rate_unavailable',
+        meta,
+      );
+    case 'UNSUPPORTED_CURRENCY':
+      return new ReceiptScanError(
+        message ?? RECEIPT_SCAN_MESSAGES.unsupportedCurrency,
+        'unsupported_currency',
+        meta,
+      );
     case 'UNKNOWN_OCR_ERROR':
     case 'UNKNOWN':
     default:

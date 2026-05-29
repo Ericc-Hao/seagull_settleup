@@ -26,6 +26,7 @@ import { type AddExpensePrefill, useAddExpenseForm } from '../hooks/useAddExpens
 import { useGroups } from '../hooks/useGroups';
 import { useInviteMembers } from '../hooks/useInviteMembers';
 import { colors, layout, spacing, typography } from '../theme';
+import { formatCurrency } from '../utils/currency';
 import { createLogger } from '../utils/logger';
 import { safeBack, navigateAfterScanReceiptSave } from '../utils/navigation';
 
@@ -141,8 +142,19 @@ export function AddExpenseScreen({ initialGroupId, prefill }: AddExpenseScreenPr
           <AmountInputCard
             amountCents={form.amountCents}
             amountText={form.amountText}
+            currency={form.currency}
             onChangeAmountText={form.onAmountChange}
           />
+
+          {prefill?.source === 'scan_receipt' &&
+          prefill.originalAmountMinor &&
+          prefill.originalCurrency &&
+          prefill.originalCurrency !== form.currency ? (
+            <Text style={[typography.caption, { color: colors.textSecondary, paddingHorizontal: 2 }]}>
+              Receipt detected: {formatCurrency(prefill.originalAmountMinor, prefill.originalCurrency)}. Converted
+              amount shown above in {form.currency}.
+            </Text>
+          ) : null}
 
           {showSplitFields ? (
             <FormSection label="Paid by">

@@ -5,6 +5,7 @@ import type {
   CreateExpenseInput,
   CreatePersonalExpenseInput,
   CreateSplitExpenseInput,
+  ReceiptConversionMetadata,
   UpdateExpenseInput,
 } from '../types/inputs';
 import type { Expense, Group } from '../types/models';
@@ -510,6 +511,7 @@ async function attachReceiptToExpense(
   userId: string,
   groupId: string | null,
   receiptLocalUri: string,
+  receiptConversion?: ReceiptConversionMetadata,
 ): Promise<void> {
   logger.info('Receipt upload started', { expenseId, table: 'receipts' });
   const uploaded = await uploadReceiptImage(userId, expenseId, receiptLocalUri);
@@ -521,6 +523,7 @@ async function attachReceiptToExpense(
     fileName: uploaded.storagePath.split('/').pop(),
     mimeType: uploaded.mimeType,
     fileSize: uploaded.fileSize,
+    conversion: receiptConversion,
   });
 
   const { error } = await supabase.from('expenses').update({ receipt_id: receipt.id }).eq('id', expenseId);
@@ -591,7 +594,7 @@ export async function createPersonalExpense(input: CreatePersonalExpenseInput): 
     logger.info('Create personal expense insert succeeded', { table: 'expenses', expenseId: expense.id });
 
     if (input.receiptLocalUri) {
-      await attachReceiptToExpense(expense.id, userId, null, input.receiptLocalUri);
+      await attachReceiptToExpense(expense.id, userId, null, input.receiptLocalUri, input.receiptConversion);
     }
 
     logger.info('Create personal expense succeeded', { table: 'expenses', expenseId: expense.id });
@@ -643,7 +646,13 @@ export async function createSplitExpense(input: CreateSplitExpenseInput): Promis
     await insertExpenseSplits(expense.id, input.splits);
 
     if (input.receiptLocalUri) {
-      await attachReceiptToExpense(expense.id, userId, input.groupId, input.receiptLocalUri);
+      await attachReceiptToExpense(
+        expense.id,
+        userId,
+        input.groupId,
+        input.receiptLocalUri,
+        input.receiptConversion,
+      );
     }
 
     logger.info('Create split expense succeeded', { table: 'expenses', expenseId: expense.id, groupId: input.groupId });

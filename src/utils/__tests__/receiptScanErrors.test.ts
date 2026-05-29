@@ -73,6 +73,24 @@ describe('receiptScanErrors', () => {
     expect(error.serverErrorCode).toBe('UNKNOWN_OCR_ERROR');
   });
 
+  it('maps server CURRENCY_NOT_DETECTED', () => {
+    const error = mapReceiptScanServerErrorCode('CURRENCY_NOT_DETECTED');
+    expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.currencyNotDetected);
+    expect(error.code).toBe('currency_not_detected');
+  });
+
+  it('maps server EXCHANGE_RATE_UNAVAILABLE', () => {
+    const error = mapReceiptScanServerErrorCode('EXCHANGE_RATE_UNAVAILABLE');
+    expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.exchangeRateUnavailable);
+    expect(error.code).toBe('exchange_rate_unavailable');
+  });
+
+  it('maps server UNSUPPORTED_CURRENCY', () => {
+    const error = mapReceiptScanServerErrorCode('UNSUPPORTED_CURRENCY');
+    expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.unsupportedCurrency);
+    expect(error.code).toBe('unsupported_currency');
+  });
+
   it('classifies undeployed function errors', () => {
     const error = classifyReceiptScanError(new Error('Failed to send a request to the Edge Function'));
     expect(error.message).toBe(RECEIPT_SCAN_MESSAGES.notDeployed);

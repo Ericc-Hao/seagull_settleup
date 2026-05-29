@@ -169,6 +169,13 @@ export interface ReceiptRow {
   file_size: number | null;
   ocr_status: 'none' | 'pending' | 'completed' | 'failed';
   ocr_text: string | null;
+  original_amount_minor: number | null;
+  original_currency: string | null;
+  converted_amount_minor: number | null;
+  converted_currency: string | null;
+  exchange_rate: number | null;
+  exchange_rate_provider: string | null;
+  exchange_rate_timestamp: string | null;
   created_at: string;
   updated_at: string;
 }

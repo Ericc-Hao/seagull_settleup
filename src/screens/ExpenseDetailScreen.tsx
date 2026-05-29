@@ -18,7 +18,9 @@ import {
   getExpenseDetailView,
 } from '../services/expenseService';
 import { colors, layout, spacing, typography } from '../theme';
+import type { CurrencyCode } from '../types/currency';
 import type { ExpenseReceiptView } from '../types/views';
+import { formatCurrency } from '../utils/currency';
 import { formatDateForDisplay, parseSupabaseDate } from '../utils/date';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
@@ -164,6 +166,14 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
   const dateLabel = formatDateForDisplay(parseSupabaseDate(detail.expenseDate.split('T')[0]));
   const receiptUrl = receipt?.displayUrl ?? receipt?.publicUrl ?? null;
   const showReceiptSection = receiptLoading || Boolean(receiptUrl);
+  const receiptConversionNote =
+    receipt?.originalAmountMinor &&
+    receipt.originalCurrency &&
+    receipt.convertedAmountMinor &&
+    receipt.convertedCurrency &&
+    receipt.originalCurrency !== receipt.convertedCurrency
+      ? `Receipt was ${formatCurrency(receipt.originalAmountMinor, receipt.originalCurrency as CurrencyCode)}, converted to ${formatCurrency(receipt.convertedAmountMinor, receipt.convertedCurrency as CurrencyCode)}.`
+      : null;
 
   return (
     <>
@@ -256,6 +266,7 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
             receiptUrl={receiptUrl}
             fileName={receipt?.fileName}
             loading={receiptLoading}
+            conversionNote={receiptConversionNote}
             onPress={receiptUrl ? () => setViewerVisible(true) : undefined}
           />
         ) : null}

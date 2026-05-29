@@ -1,6 +1,8 @@
 /** Domain models — app layer; mapped from Supabase rows in src/lib/mappers.ts */
 
-export type CurrencyCode = 'CAD';
+export type { CurrencyCode } from './currency';
+import type { CurrencyCode } from './currency';
+export { isCurrencyCode, normalizeCurrencyCode, SUPPORTED_CURRENCIES } from './currency';
 export type GroupType = 'Trip' | 'Dinner' | 'Camping' | 'Skiing' | 'Roommate' | 'Other';
 export type GroupStatus = 'planning' | 'active' | 'inactive' | 'ready_to_settle' | 'settled' | 'archived';
 export type SettlementMode = 'individual' | 'team';
@@ -201,6 +203,13 @@ export interface Receipt {
   fileSize?: number;
   ocrStatus: 'none' | 'pending' | 'completed' | 'failed';
   ocrText?: string;
+  originalAmountMinor?: number;
+  originalCurrency?: CurrencyCode;
+  convertedAmountMinor?: number;
+  convertedCurrency?: CurrencyCode;
+  exchangeRate?: number;
+  exchangeRateProvider?: string;
+  exchangeRateTimestamp?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -12,11 +12,13 @@ export function ReceiptPreviewCard({
   fileName,
   onPress,
   loading = false,
+  conversionNote,
 }: {
   receiptUrl?: string | null;
   fileName?: string | null;
   onPress?: () => void;
   loading?: boolean;
+  conversionNote?: string | null;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -99,6 +101,11 @@ export function ReceiptPreviewCard({
           {!showError && onPress ? (
             <Text style={[typography.caption, { color: colors.primary, textAlign: 'center' }]}>
               Tap to view full size
+            </Text>
+          ) : null}
+          {conversionNote ? (
+            <Text style={[typography.caption, { color: colors.textSecondary, textAlign: 'center' }]}>
+              {conversionNote}
             </Text>
           ) : null}
         </Pressable>

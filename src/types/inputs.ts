@@ -109,6 +109,7 @@ export interface CreatePersonalExpenseInput {
   note?: string;
   expenseDate: string;
   receiptLocalUri?: string;
+  receiptConversion?: ReceiptConversionMetadata;
 }
 
 export interface CreateSplitExpenseInput {
@@ -124,6 +125,7 @@ export interface CreateSplitExpenseInput {
   splitMethod: SplitMethod;
   splits: { memberId: string; shareAmountCents: number }[];
   receiptLocalUri?: string;
+  receiptConversion?: ReceiptConversionMetadata;
 }
 
 export interface UpdateExpenseInput {
@@ -146,4 +148,15 @@ export interface UpdateProfileInput {
   emtEmail?: string;
   emtPhone?: string;
   preferredEmtMethod?: PreferredEmtMethod;
+  defaultCurrency?: CurrencyCode;
+}
+
+export interface ReceiptConversionMetadata {
+  originalAmountMinor?: number;
+  originalCurrency?: CurrencyCode;
+  convertedAmountMinor?: number;
+  convertedCurrency?: CurrencyCode;
+  exchangeRate?: number;
+  exchangeRateProvider?: string;
+  exchangeRateTimestamp?: string;
 }

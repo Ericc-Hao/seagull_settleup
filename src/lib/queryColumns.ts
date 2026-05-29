@@ -13,7 +13,7 @@ export const GROUP_INVITATION_COLUMNS =
   'id, group_id, invited_by, invited_email, invited_user_id, group_member_id, status, token, message, expires_at, accepted_at, declined_at, email_sent_at, email_error, created_at, updated_at';
 
 export const RECEIPT_COLUMNS =
-  'id, expense_id, user_id, group_id, storage_path, public_url, file_name, mime_type, file_size, ocr_status, ocr_text, created_at, updated_at';
+  'id, expense_id, user_id, group_id, storage_path, public_url, file_name, mime_type, file_size, ocr_status, ocr_text, original_amount_minor, original_currency, converted_amount_minor, converted_currency, exchange_rate, exchange_rate_provider, exchange_rate_timestamp, created_at, updated_at';
 
 export const NOTIFICATION_LIST_LIMIT = 50;
 export const SETTLEMENT_LIST_LIMIT = 100;

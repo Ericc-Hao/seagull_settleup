@@ -1,7 +1,8 @@
 import { TextInput, Text, View } from 'react-native';
 
 import { colors, radii, shadows, spacing, typography } from '../../theme';
-import { formatCAD } from '../../utils/money';
+import type { CurrencyCode } from '../../types/currency';
+import { formatCurrency } from '../../utils/currency';
 
 export function AmountInputCard({
   amountCents,
@@ -9,14 +10,19 @@ export function AmountInputCard({
   amountText,
   currency = 'CAD',
   error,
+  hint,
 }: {
   amountCents: number;
   amountText: string;
   onChangeAmountText: (value: string) => void;
-  currency?: string;
+  currency?: CurrencyCode | string;
   error?: string;
+  hint?: string;
 }) {
-  const displayHint = amountCents > 0 ? formatCAD(amountCents) : '$0.00 CAD';
+  const resolvedCurrency = (currency as CurrencyCode) || 'CAD';
+  const displayHint =
+    hint ??
+    (amountCents > 0 ? formatCurrency(amountCents, resolvedCurrency) : formatCurrency(0, resolvedCurrency));
 
   return (
     <View
@@ -49,7 +55,7 @@ export function AmountInputCard({
             },
           ]}
         />
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>{currency}</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>{resolvedCurrency}</Text>
       </View>
       <Text style={[typography.caption, { color: colors.textTertiary }]}>{displayHint}</Text>
       {error ? <Text style={[typography.caption, { color: colors.danger }]}>{error}</Text> : null}

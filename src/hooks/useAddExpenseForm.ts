@@ -9,6 +9,9 @@ import { getCachedCategories } from '../services/categoryService';
 import { createPersonalExpense, createSplitExpense } from '../services/expenseService';
 import { getCurrentUserId, getGroupById } from '../services/groupService';
 import type { ExpenseType, SplitMethod } from '../types/models';
+import type { CurrencyCode } from '../types/currency';
+import { normalizeCurrencyCode } from '../types/currency';
+import type { ReceiptConversionMetadata } from '../types/inputs';
 import type { GroupSelectorOption } from '../types/views';
 import { getCategoryPickerOptions, resolveCategoryForSave } from '../utils/category';
 import { isoNow } from '../utils/date';
@@ -18,21 +21,16 @@ import {
   invalidateAfterCreatePersonalExpense,
   invalidateAfterCreateSplitExpense,
 } from '../utils/mutationInvalidation';
-import { addCents, dollarsToCents, formatAmountInputValue, splitAmountEvenly } from '../utils/money';
+import { addCents, splitAmountEvenly } from '../utils/money';
+import {
+  formatAmountInputValue,
+  parseAmountInput,
+  sanitizeAmountInput,
+} from '../utils/currency';
+import { getProfile } from '../services/profileService';
 
 import { isSplitSelectableMember } from '../utils/groupParticipants';
 import { useGroupParticipants } from './useGroupParticipants';
-
-const logger = createLogger('useAddExpenseForm');
-
-function sanitizeAmountInput(value: string): string {
-  const cleaned = value.replace(/[^0-9.]/g, '');
-  const parts = cleaned.split('.');
-  if (parts.length <= 1) {
-    return cleaned;
-  }
-  return `${parts[0]}.${parts.slice(1).join('').slice(0, 2)}`;
-}
 
 export interface UseGroupsResult {
   groups: GroupSelectorOption[];
@@ -44,11 +42,19 @@ export interface UseGroupsResult {
   refetch: () => void;
 }
 
+const logger = createLogger('useAddExpenseForm');
+
 export interface AddExpensePrefill {
   source?: string;
   amountCents?: number;
+  currency?: CurrencyCode;
   receiptUri?: string;
   expenseType?: ExpenseType;
+  originalAmountMinor?: number;
+  originalCurrency?: CurrencyCode;
+  exchangeRate?: number;
+  exchangeRateTimestamp?: string;
+  exchangeRateProvider?: string;
 }
 
 export function useAddExpenseForm(
@@ -58,6 +64,20 @@ export function useAddExpenseForm(
 ) {
   const { versions, invalidate } = useAppData();
   const userId = getCurrentUserId();
+  const profile = getProfile();
+  const defaultCurrency = normalizeCurrencyCode(prefill?.currency ?? profile?.defaultCurrency);
+  const receiptConversion: ReceiptConversionMetadata | undefined =
+    prefill?.originalAmountMinor && prefill.originalCurrency
+      ? {
+          originalAmountMinor: prefill.originalAmountMinor,
+          originalCurrency: prefill.originalCurrency,
+          convertedAmountMinor: prefill.amountCents,
+          convertedCurrency: defaultCurrency,
+          exchangeRate: prefill.exchangeRate,
+          exchangeRateTimestamp: prefill.exchangeRateTimestamp,
+          exchangeRateProvider: prefill.exchangeRateProvider,
+        }
+      : undefined;
 
   const [kind, setKind] = useState<ExpenseType>(prefill?.expenseType ?? 'split');
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(initialGroupId);
@@ -70,7 +90,9 @@ export function useAddExpenseForm(
   } = useGroupParticipants(participantGroupId, 'split');
 
   const [amountText, setAmountText] = useState(
-    prefill?.amountCents && prefill.amountCents > 0 ? formatAmountInputValue(prefill.amountCents) : '',
+    prefill?.amountCents && prefill.amountCents > 0
+      ? formatAmountInputValue(prefill.amountCents, defaultCurrency)
+      : '',
   );
   const [categoryKey, setCategoryKey] = useState<CategoryKey | ''>('');
   const [payerMemberId, setPayerMemberId] = useState('');
@@ -87,7 +109,7 @@ export function useAddExpenseForm(
   const [submitError, setSubmitError] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
 
-  const amountCents = dollarsToCents(amountText);
+  const amountCents = parseAmountInput(amountText, defaultCurrency);
   const categories = useMemo(() => getCachedCategories(), [versions.expenses]);
 
   const categoryOptions: CategoryOption[] = useMemo(
@@ -160,24 +182,24 @@ export function useAddExpenseForm(
   }, []);
 
   const onAmountChange = useCallback((value: string) => {
-    setAmountText(sanitizeAmountInput(value));
-  }, []);
+    setAmountText(sanitizeAmountInput(value, defaultCurrency));
+  }, [defaultCurrency]);
 
   const equalShares = useMemo(() => {
     if (splitMemberIds.length === 0 || amountCents <= 0) {
       return [] as number[];
     }
     return splitAmountEvenly(amountCents, splitMemberIds.length);
-  }, [amountCents, splitMemberIds]);
+  }, [amountCents, defaultCurrency, splitMemberIds]);
 
   const customShareCentsByMember = useMemo(() => {
     const map: Record<string, number> = {};
     for (const memberId of splitMemberIds) {
       const raw = customAmounts[memberId] ?? '';
-      map[memberId] = dollarsToCents(raw);
+      map[memberId] = parseAmountInput(raw, defaultCurrency);
     }
     return map;
-  }, [customAmounts, splitMemberIds]);
+  }, [customAmounts, defaultCurrency, splitMemberIds]);
 
   const previewRows: SplitPreviewRow[] = useMemo(() => {
     return splitMemberIds
@@ -239,9 +261,9 @@ export function useAddExpenseForm(
     const lastId = splitMemberIds[splitMemberIds.length - 1];
     setCustomAmounts((current) => ({
       ...current,
-      [lastId]: formatAmountInputValue(remaining),
+      [lastId]: formatAmountInputValue(remaining, defaultCurrency),
     }));
-  }, [amountCents, customShareCentsByMember, splitMemberIds]);
+  }, [amountCents, customShareCentsByMember, defaultCurrency, splitMemberIds]);
 
   const resetEqualCustom = useCallback(() => {
     if (splitMemberIds.length === 0 || amountCents <= 0) {
@@ -250,10 +272,10 @@ export function useAddExpenseForm(
     const shares = splitAmountEvenly(amountCents, splitMemberIds.length);
     const next: Record<string, string> = {};
     splitMemberIds.forEach((id, index) => {
-      next[id] = formatAmountInputValue(shares[index] ?? 0);
+      next[id] = formatAmountInputValue(shares[index] ?? 0, defaultCurrency);
     });
     setCustomAmounts(next);
-  }, [amountCents, splitMemberIds]);
+  }, [amountCents, defaultCurrency, splitMemberIds]);
 
   useEffect(() => {
     if (splitMethod === 'custom' && amountCents > 0) {
@@ -281,12 +303,14 @@ export function useAddExpenseForm(
         logger.info('Create personal expense started');
         await createPersonalExpense({
           amountCents,
+          currency: defaultCurrency,
           categoryId,
           categoryName,
           description,
           note: note.trim() || undefined,
           expenseDate,
           receiptLocalUri: receiptUri,
+          receiptConversion,
         });
         logger.info('Create personal expense succeeded');
       } else {
@@ -306,6 +330,7 @@ export function useAddExpenseForm(
           groupId: selectedGroupId!,
           payerMemberId,
           amountCents,
+          currency: defaultCurrency,
           categoryId,
           categoryName,
           description,
@@ -314,6 +339,7 @@ export function useAddExpenseForm(
           splitMethod,
           splits,
           receiptLocalUri: receiptUri,
+          receiptConversion,
         });
         logger.info('Create split expense succeeded', { groupId: selectedGroupId });
       }
@@ -337,10 +363,12 @@ export function useAddExpenseForm(
     categories,
     categoryKey,
     customShareCentsByMember,
+    defaultCurrency,
     equalShares,
     kind,
     note,
     payerMemberId,
+    receiptConversion,
     receiptUri,
     invalidate,
     selectedGroupId,
@@ -386,6 +414,7 @@ export function useAddExpenseForm(
     refreshMembers,
     amountText,
     amountCents,
+    currency: defaultCurrency,
     onAmountChange,
     categoryKey,
     setCategoryKey,
@@ -394,7 +423,10 @@ export function useAddExpenseForm(
     setSplitMethod,
     customAmounts,
     setCustomAmount: (memberId: string, value: string) => {
-      setCustomAmounts((current) => ({ ...current, [memberId]: sanitizeAmountInput(value) }));
+      setCustomAmounts((current) => ({
+        ...current,
+        [memberId]: sanitizeAmountInput(value, defaultCurrency),
+      }));
     },
     fillRemaining,
     resetEqualCustom,

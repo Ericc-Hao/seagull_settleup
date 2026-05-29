@@ -194,6 +194,7 @@ export async function updateProfile(
         emt_email: input.emtEmail,
         emt_phone: input.emtPhone,
         preferred_emt_method: input.preferredEmtMethod,
+        ...(input.defaultCurrency !== undefined ? { default_currency: input.defaultCurrency } : {}),
       })
       .eq('id', authUserId)
       .select('*')

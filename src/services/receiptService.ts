@@ -1,6 +1,7 @@
 import { mapReceipt } from '../lib/mappers';
 import { supabase } from '../lib/supabase';
 import type { Receipt } from '../types/models';
+import type { ReceiptConversionMetadata } from '../types/inputs';
 import type { ExpenseReceiptView } from '../types/views';
 import { RECEIPT_COLUMNS, RECEIPT_LIST_LIMIT } from '../lib/queryColumns';
 import { createLogger } from '../utils/logger';
@@ -50,6 +51,13 @@ export function toExpenseReceiptView(receipt: Receipt, displayUrl?: string | nul
     fileSize: receipt.fileSize,
     ocrStatus: receipt.ocrStatus,
     ocrText: receipt.ocrText,
+    originalAmountMinor: receipt.originalAmountMinor,
+    originalCurrency: receipt.originalCurrency,
+    convertedAmountMinor: receipt.convertedAmountMinor,
+    convertedCurrency: receipt.convertedCurrency,
+    exchangeRate: receipt.exchangeRate,
+    exchangeRateProvider: receipt.exchangeRateProvider,
+    exchangeRateTimestamp: receipt.exchangeRateTimestamp,
   };
 }
 
@@ -188,6 +196,7 @@ export async function createReceipt(input: {
   fileName?: string;
   mimeType?: string;
   fileSize?: number;
+  conversion?: ReceiptConversionMetadata;
 }): Promise<Receipt> {
   logger.info('Create receipt started', { table: 'receipts', groupId: input.groupId, expenseId: input.expenseId });
   try {
@@ -196,6 +205,7 @@ export async function createReceipt(input: {
       throw new Error('You must be logged in to upload a receipt.');
     }
 
+    const conversion = input.conversion;
     const { data, error } = await supabase
       .from('receipts')
       .insert({
@@ -207,6 +217,13 @@ export async function createReceipt(input: {
         file_name: input.fileName ?? null,
         mime_type: input.mimeType ?? null,
         file_size: input.fileSize ?? null,
+        original_amount_minor: conversion?.originalAmountMinor ?? null,
+        original_currency: conversion?.originalCurrency ?? null,
+        converted_amount_minor: conversion?.convertedAmountMinor ?? null,
+        converted_currency: conversion?.convertedCurrency ?? null,
+        exchange_rate: conversion?.exchangeRate ?? null,
+        exchange_rate_provider: conversion?.exchangeRateProvider ?? null,
+        exchange_rate_timestamp: conversion?.exchangeRateTimestamp ?? null,
       })
       .select('*')
       .single();

@@ -4,6 +4,7 @@ export { AvatarSelectRow, type AvatarOption } from './AvatarSelectRow';
 export { CategoryGrid, type CategoryOption } from './CategoryGrid';
 export { MemberCheckList, type MemberCheckItem } from './MemberCheckList';
 export { SplitPreviewList, type SplitPreviewItem } from './SplitPreviewList';
+export { CurrencySelector } from './CurrencySelector';
 export { ReceiptActions } from './ReceiptActions';
 export { NoteField } from './NoteField';
 export { FormInput } from './FormInput';

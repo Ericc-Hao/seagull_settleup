@@ -12,12 +12,14 @@ import {
   SegmentedPillLight,
   UserAvatar,
 } from '../components';
+import { CurrencySelector } from '../components/form';
 import { useAppData } from '../context/AppDataContext';
 import { invalidateAfterUpdateProfile } from '../utils/mutationInvalidation';
 import { EMT_METHOD_OPTIONS } from '../data/constants';
 import { getProfile, updateAvatar, updateProfile } from '../services/profileService';
 import { colors, layout, radii, spacing, typography } from '../theme';
-import type { PreferredEmtMethod } from '../types/models';
+import type { CurrencyCode, PreferredEmtMethod } from '../types/models';
+import { normalizeCurrencyCode } from '../types/currency';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
 import { safeBack } from '../utils/navigation';
@@ -74,6 +76,9 @@ export function EditProfileScreen() {
   const [emtPhone, setEmtPhone] = useState(profile?.emtPhone ?? '');
   const [preferredEmtMethod, setPreferredEmtMethod] = useState<PreferredEmtMethod>(
     profile?.preferredEmtMethod ?? 'none',
+  );
+  const [defaultCurrency, setDefaultCurrency] = useState<CurrencyCode>(
+    normalizeCurrencyCode(profile?.defaultCurrency),
   );
   const [avatarUri, setAvatarUri] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
@@ -147,6 +152,7 @@ export function EditProfileScreen() {
         emtEmail: emtEmail.trim() || undefined,
         emtPhone: emtPhone.trim() || undefined,
         preferredEmtMethod,
+        defaultCurrency,
       });
       invalidateAfterUpdateProfile(invalidate);
 
@@ -221,6 +227,10 @@ export function EditProfileScreen() {
             <ProfileTextInput label="Phone" value={phone} onChangeText={setPhone} />
             <ProfileTextInput label="Email" value={email} onChangeText={() => {}} editable={false} />
           </View>
+        </FormSection>
+
+        <FormSection label="Preferences">
+          <CurrencySelector value={defaultCurrency} onChange={setDefaultCurrency} disabled={saving} />
         </FormSection>
 
         <FormSection label="EMT Payment Info">

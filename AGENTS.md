@@ -95,6 +95,143 @@ Frontend may only use public Expo env vars:
 Use shared Supabase client from `src/lib/supabase.ts`.
 Do not create new Supabase clients inside components.
 
+## Supabase migration safety rules
+
+Supabase migrations must be treated carefully.
+
+Never create arbitrary timestamp/version prefixes manually if the project already has an established remote migration history.
+
+Before creating or applying migrations, always check:
+
+1. Local migration files:
+   `supabase/migrations/`
+
+2. Remote migration history:
+   `npx supabase migration list`
+
+3. Current linked project:
+   `npx supabase projects list`
+   `npx supabase link --project-ref <project-ref>`
+
+For this project, the Supabase project ref is:
+
+`yljcebabixdakgwsvqtm`
+
+### Do not blindly run db push
+
+Before running:
+
+```bash
+npx supabase db push
+```
+
+Make sure local migration versions match remote migration history.
+
+If db push says:
+
+- Remote migration versions not found in local migrations directory
+- The remote database's migration history does not match local files
+
+Do not immediately run migration repair.
+
+First:
+
+- inspect remote migration history
+- inspect local migration files
+- compare logical migration names
+- determine whether the mismatch is only timestamp/version prefix mismatch
+- determine whether local migrations are ahead of remote
+
+### Preferred fix for timestamp mismatch
+
+If remote migrations and local migrations are logically equivalent but timestamps differ, prefer:
+
+**Option A:** Rename local migration files to match the remote applied version prefixes.
+
+Do not modify SQL contents.
+Only rename file prefixes.
+
+This keeps remote migration history untouched and is safer than repairing remote history.
+
+Only after local filenames match remote history should db push be used to apply truly pending migrations.
+
+If a pending migration's version sorts before already-applied remote migrations, use:
+
+```bash
+npx supabase db push --include-all
+```
+
+Only for that out-of-order apply case, and only after confirming the migration SQL is safe to run.
+
+### Migration repair is dangerous
+
+Do not suggest or run:
+
+```bash
+supabase migration repair
+```
+
+unless:
+
+1. remote schema has been inspected
+2. local migrations have been compared to remote history
+3. a backup of `supabase_migrations.schema_migrations` has been created
+4. the user explicitly approves the repair plan
+
+Before any repair, create a backup:
+
+```sql
+create table if not exists supabase_migrations.schema_migrations_backup_YYYYMMDD as
+select * from supabase_migrations.schema_migrations;
+```
+
+Never repair migration history blindly.
+
+Never reset the remote database unless the user explicitly asks and understands data loss risk.
+
+### Applying urgent migrations
+
+If migration history is mismatched and an urgent schema change is needed, use Supabase Dashboard SQL Editor to manually run only the new migration SQL.
+
+After manually applying SQL:
+
+- verify schema using `information_schema` or `pg_indexes`
+- then later fix migration history properly
+
+Do not use db push as a workaround when history is mismatched.
+
+### New migration rules
+
+When adding a new migration:
+
+- create a new migration file only
+- do not edit old applied migrations
+- use idempotent SQL where possible:
+  - `add column if not exists`
+  - `create index if not exists`
+  - `create extension if not exists`
+- use `--` for PostgreSQL comments, not a single `-`
+- include verification SQL in the final response if the migration is important
+
+### Current known migration context
+
+This project previously had a mismatch between local short-version migrations and remote long-version migrations.
+
+Remote had 24 applied migrations.
+Local had 27 migrations.
+The first 24 were logically equivalent but had different version prefixes.
+The safest plan was to rename local files to match remote versions, then run db push to apply only the 3 pending migrations.
+
+The 3 pending local migrations at that time were:
+
+- `202605251200_add_settlements_metadata`
+- `202605261200_add_performance_indexes`
+- `202605281200_add_receipt_conversion_metadata`
+
+These have since been applied to remote. Future agents must avoid creating another mismatch.
+
+When adding new migrations, use version timestamps after the latest applied remote migration (check `npx supabase migration list` first).
+
 ## Auth rules
 
 Supported auth:

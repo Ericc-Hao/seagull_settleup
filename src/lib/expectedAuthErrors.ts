@@ -1,12 +1,14 @@
 import { AuthValidationError } from '../services/authService';
 import { isInvalidCredentialsError, isRecoverableAuthSessionError } from '../utils/authErrors';
 import { getErrorMessage } from '../utils/errors';
+import { isExpectedReceiptScanError } from '../utils/receiptScanErrors';
 
 function isExpectedAuthError(error: unknown): boolean {
   if (
     error instanceof AuthValidationError ||
     isRecoverableAuthSessionError(error) ||
-    isInvalidCredentialsError(error)
+    isInvalidCredentialsError(error) ||
+    isExpectedReceiptScanError(error)
   ) {
     return true;
   }

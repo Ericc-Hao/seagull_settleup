@@ -44,23 +44,36 @@ export interface UseGroupsResult {
   refetch: () => void;
 }
 
-export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuery: UseGroupsResult) {
+export interface AddExpensePrefill {
+  source?: string;
+  amountCents?: number;
+  receiptUri?: string;
+  expenseType?: ExpenseType;
+}
+
+export function useAddExpenseForm(
+  initialGroupId: string | undefined,
+  groupsQuery: UseGroupsResult,
+  prefill?: AddExpensePrefill,
+) {
   const { versions, invalidate } = useAppData();
   const userId = getCurrentUserId();
 
-  const [kind, setKind] = useState<ExpenseType>('split');
+  const [kind, setKind] = useState<ExpenseType>(prefill?.expenseType ?? 'split');
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(initialGroupId);
   const [members, setMembers] = useState<GroupMemberWithProfile[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
 
-  const [amountText, setAmountText] = useState('');
+  const [amountText, setAmountText] = useState(
+    prefill?.amountCents && prefill.amountCents > 0 ? formatAmountInputValue(prefill.amountCents) : '',
+  );
   const [categoryKey, setCategoryKey] = useState<CategoryKey | ''>('');
   const [payerMemberId, setPayerMemberId] = useState('');
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>([]);
   const [splitMethod, setSplitMethod] = useState<SplitMethod>('equal');
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
   const [note, setNote] = useState('');
-  const [receiptUri, setReceiptUri] = useState<string | undefined>();
+  const [receiptUri, setReceiptUri] = useState<string | undefined>(prefill?.receiptUri);
 
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
@@ -100,8 +113,8 @@ export function useAddExpenseForm(initialGroupId: string | undefined, groupsQuer
   const isOwner = selectedGroupRecord?.ownerId === userId;
 
   useEffect(() => {
-    logger.info('Add expense screen opened', { initialGroupId });
-  }, [initialGroupId]);
+    logger.info('Add expense screen opened', { initialGroupId, source: prefill?.source });
+  }, [initialGroupId, prefill?.source]);
 
   useEffect(() => {
     if (initialGroupId) {

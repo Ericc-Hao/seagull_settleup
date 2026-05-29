@@ -49,6 +49,12 @@ const SENSITIVE_KEY_FRAGMENTS = [
   'service_role',
   'anon_key',
   'publishable_key',
+  'openai',
+  'base64',
+  'imagebase64',
+  'receipturi',
+  'receipt_uri',
+  'rawtext',
 ] as const;
 
 let remoteLogHandler: ((entry: LogEntry) => void) | null = null;

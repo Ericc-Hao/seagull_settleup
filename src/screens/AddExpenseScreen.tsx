@@ -22,7 +22,7 @@ import {
 } from '../components/expenses';
 import { GroupSelectModal, GroupSelector, InviteMembersModal, PaidBySelector } from '../components/groups';
 import { EXPENSE_TYPE_OPTIONS } from '../data/constants';
-import { useAddExpenseForm } from '../hooks/useAddExpenseForm';
+import { type AddExpensePrefill, useAddExpenseForm } from '../hooks/useAddExpenseForm';
 import { useGroups } from '../hooks/useGroups';
 import { useInviteMembers } from '../hooks/useInviteMembers';
 import { colors, layout, spacing, typography } from '../theme';
@@ -35,11 +35,12 @@ const SECTION_GAP = 20;
 
 interface AddExpenseScreenProps {
   initialGroupId?: string;
+  prefill?: AddExpensePrefill;
 }
 
-export function AddExpenseScreen({ initialGroupId }: AddExpenseScreenProps) {
+export function AddExpenseScreen({ initialGroupId, prefill }: AddExpenseScreenProps) {
   const groupsQuery = useGroups();
-  const form = useAddExpenseForm(initialGroupId, groupsQuery);
+  const form = useAddExpenseForm(initialGroupId, groupsQuery, prefill);
   const inviteForm = useInviteMembers(form.selectedGroupId ?? '');
   const [inviteWarnings, setInviteWarnings] = useState<string[]>([]);
 

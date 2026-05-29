@@ -132,7 +132,6 @@ export function EditProfileScreen() {
     }
 
     setSaving(true);
-    logger.info('Update profile submit started');
     try {
       let avatarUrl = profile.avatarUrl;
       let avatarWarning: string | null = null;
@@ -162,7 +161,6 @@ export function EditProfileScreen() {
       }
 
       setMessage('Profile saved.');
-      logger.info('Update profile submit succeeded');
       setTimeout(() => safeBack('/(tabs)/profile'), 650);
     } catch (err) {
       logger.error('Update profile submit failed', err);

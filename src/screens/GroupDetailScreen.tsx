@@ -18,10 +18,7 @@ import { useGroupMemberActions } from '../hooks/useGroupMemberActions';
 import { useInviteMembers } from '../hooks/useInviteMembers';
 import type { GroupMemberWithProfile } from '../types/views';
 import { colors, layout, spacing, typography } from '../theme';
-import { createLogger } from '../utils/logger';
 import { safeBack } from '../utils/navigation';
-
-const logger = createLogger('GroupDetailScreen');
 
 interface GroupDetailScreenProps {
   groupId: string;
@@ -40,12 +37,10 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
   const actionError = detail.actionError ?? memberActions.actionError;
 
   const openSettings = () => {
-    logger.info('Open group settings', { groupId });
     setShowSettings(true);
   };
 
   const openMemberSheet = (member: GroupMemberWithProfile) => {
-    logger.info('Open member action sheet', { groupId, memberId: member.id });
     memberActions.clearActionError();
     setSelectedMember(member);
   };

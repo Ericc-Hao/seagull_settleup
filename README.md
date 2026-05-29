@@ -187,7 +187,7 @@ Add `EXPO_PUBLIC_AUTH_REDIRECT_URL=https://split.seagullcoffee.ca` to your local
 ### Forgot password flow
 
 1. User requests recovery from `/forgot-password`.
-2. The `send-password-reset` Edge Function sends a branded Resend email with redirect `https://split.seagullcoffee.ca/reset-password`.
+2. The `send-password-reset` Edge Function sends a branded Resend email using `getPasswordResetUrl()` from `_shared/appUrls.ts`.
 3. `/reset-password` exchanges the recovery code, verifies a session exists, then allows `updateUser({ password })`.
 4. If the link is missing or expired (`otp_expired`), the UI shows a clean message: “This reset link is invalid or has expired. Please request a new password reset email.” — no redirect to Home.
 
@@ -195,10 +195,12 @@ Add `EXPO_PUBLIC_AUTH_REDIRECT_URL=https://split.seagullcoffee.ca` to your local
 
 Password reset and invitation emails use normal HTTPS URLs — not `seagullsplit://` custom scheme links. Universal Links open the iOS app when installed and fall back to the web app in Safari otherwise.
 
-| Flow | Email URL |
-|------|-----------|
-| Password reset | `https://split.seagullcoffee.ca/reset-password?token_hash=...&type=recovery` |
-| Group invitation | `https://split.seagullcoffee.ca/register?invite={token}` |
+| Flow | URL |
+|------|-----|
+| Password reset | `getPasswordResetUrl()` + `token_hash` and `type=recovery` |
+| Group invitation | `getInvitationUrl(token)` |
+
+See `src/lib/publicUrls.ts` (app) and `supabase/functions/_shared/appUrls.ts` (Edge Functions).
 
 **iOS app configuration** (`app.json`):
 
@@ -337,7 +339,7 @@ npx supabase functions deploy send-group-invitation
 
 Invitation emails use:
 
-`https://split.seagullcoffee.ca/register?invite={token}`
+Invitation links use `getInvitationUrl(token)` from `_shared/appUrls.ts` (default base: `https://split.seagullcoffee.ca`).
 
 Email clients cannot load local `assets/icon.png`. The web app uses the local asset; emails use the public `EMAIL_ICON_URL` from Supabase Storage.
 

@@ -112,7 +112,6 @@ export function NotificationsScreen() {
 
   const openInvitationModal = useCallback(
     async (notification: Notification) => {
-      logger.info('Notification opened', { notificationId: notification.id, type: notification.type });
       if (!notification.isRead) {
         await markAsRead(notification.id);
       }
@@ -147,7 +146,6 @@ export function NotificationsScreen() {
             status: 'cancelled',
           });
         }
-        logger.info('Invitation modal opened', { invitationId, groupId: fallback.groupId });
       } catch (error) {
         logger.error('Failed to load invitation detail', error, { invitationId });
         setSelectedInvitation({

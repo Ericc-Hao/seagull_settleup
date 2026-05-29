@@ -285,7 +285,6 @@ Services must not call:
 
 - `refreshCache`
 - `setCache`
-- `cacheEvents`
 - `invalidate` directly
 
 Hooks/screens call `invalidate(...)` after successful mutations.
@@ -467,16 +466,16 @@ Required Supabase Dashboard → Authentication → URL Configuration:
 
 Email links use HTTPS Universal Links with automatic web fallback. Do **not** use `seagullsplit://` links in emails.
 
-| Flow | URL |
-|------|-----|
-| Password reset | `https://split.seagullcoffee.ca/reset-password?token_hash=...&type=recovery` |
-| Invitation | `https://split.seagullcoffee.ca/register?invite={token}` |
+| Flow | URL helper |
+|------|------------|
+| Password reset | `getPasswordResetUrl()` + `token_hash` and `type=recovery` query params |
+| Invitation | `getInvitationUrl(token)` |
 
 iOS app (`app.json`):
 
 - `ios.associatedDomains`: `applinks:split.seagullcoffee.ca`
 - `ios.bundleIdentifier`: `com.seagullsplit.app`
-- `scheme`: `seagullsplit` (OAuth callbacks only)
+- `scheme`: `seagullsplit` (native deep links only — not for email)
 
 Required hosted files (GitHub Pages):
 
@@ -546,7 +545,6 @@ Expected errors should use `logger.warn` / `logger.info`, not `logger.error` if 
 Examples of expected errors:
 
 - invalid login credentials
-- OAuth cancelled
 - OCR no amount detected
 - invalid refresh token
 - missing scan receipt config

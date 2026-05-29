@@ -30,15 +30,12 @@ import {
   parseAmountInput,
   sanitizeAmountInput,
 } from '../utils/currency';
-import { createLogger } from '../utils/logger';
 import { safeBack } from '../utils/navigation';
 import {
   RECEIPT_SCAN_MESSAGES,
   ReceiptScanError,
 } from '../utils/receiptScanErrors';
 import { Icon, type IconName } from '../components/Icon';
-
-const logger = createLogger('ScanReceiptScreen');
 
 function SourceButton({
   icon,
@@ -325,11 +322,7 @@ export function ScanReceiptScreen() {
   }, [amountText]);
 
   const scanPickedAsset = useCallback(
-    async (asset: ImagePicker.ImagePickerAsset, options?: { replacing?: boolean }) => {
-      if (options?.replacing) {
-        logger.info('Receipt scan photo replaced');
-      }
-
+    async (asset: ImagePicker.ImagePickerAsset) => {
       setShowReplaceChooser(false);
       setReceiptUri(asset.uri);
       setScanResult(undefined);
@@ -343,7 +336,6 @@ export function ScanReceiptScreen() {
       }
 
       setScanning(true);
-      logger.info('Receipt scan image selected', { mimeType: asset.mimeType ?? 'image/jpeg', targetCurrency });
       try {
         const result = await scanReceiptImage({
           imageBase64: asset.base64,
@@ -375,10 +367,6 @@ export function ScanReceiptScreen() {
 
     setConverting(true);
     setError(undefined);
-    logger.info('Receipt manual currency conversion started', {
-      sourceCurrency: selectedSourceCurrency,
-      targetCurrency,
-    });
 
     try {
       const result = await convertReceiptAmount({
@@ -403,7 +391,7 @@ export function ScanReceiptScreen() {
   }, [handleScanResult, scanResult, selectedSourceCurrency, targetCurrency]);
 
   const takePhoto = useCallback(
-    async (replacing = false) => {
+    async () => {
       setError(undefined);
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
@@ -419,14 +407,14 @@ export function ScanReceiptScreen() {
         return;
       }
       if (result.assets[0]) {
-        void scanPickedAsset(result.assets[0], { replacing });
+        void scanPickedAsset(result.assets[0]);
       }
     },
     [scanPickedAsset],
   );
 
   const uploadImage = useCallback(
-    async (replacing = false) => {
+    async () => {
       setError(undefined);
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -442,7 +430,7 @@ export function ScanReceiptScreen() {
         return;
       }
       if (result.assets[0]) {
-        void scanPickedAsset(result.assets[0], { replacing });
+        void scanPickedAsset(result.assets[0]);
       }
     },
     [scanPickedAsset],
@@ -555,8 +543,8 @@ export function ScanReceiptScreen() {
               <ReceiptSourceCard
                 disabled={scanning || converting}
                 label="Choose a new photo"
-                onTakePhoto={() => void takePhoto(true)}
-                onUploadImage={() => void uploadImage(true)}
+                onTakePhoto={() => void takePhoto()}
+                onUploadImage={() => void uploadImage()}
               />
             ) : null}
 

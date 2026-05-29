@@ -101,18 +101,8 @@ export function SettleUpScreen({ mode, groupId }: SettleUpScreenProps) {
     }
     const transferGroupId = confirmTransfer.groupId;
     setMarking(true);
-    logger.info('Mark as paid started', {
-      groupId: transferGroupId,
-      transferId: confirmTransfer.id,
-      mode: isGlobal ? 'global' : 'group',
-    });
     try {
       await markTransferAsPaid(transferGroupId, confirmTransfer);
-      logger.info('Mark as paid succeeded', {
-        groupId: transferGroupId,
-        transferId: confirmTransfer.id,
-        mode: isGlobal ? 'global' : 'group',
-      });
       setConfirmTransfer(null);
       setDetailTransfer(null);
       invalidateAfterMarkTransferPaid(invalidate, transferGroupId);

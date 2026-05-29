@@ -71,7 +71,6 @@ export function EditGroupScreen({ groupId }: EditGroupScreenProps) {
 
     setSaving(true);
     setError(undefined);
-    logger.info('Update group details submit started', { groupId });
     try {
       await updateGroupDetails(groupId, {
         name: trimmedName,
@@ -80,7 +79,6 @@ export function EditGroupScreen({ groupId }: EditGroupScreenProps) {
         endDate: endDate || null,
       });
       invalidateAfterUpdateGroup(invalidate, groupId);
-      logger.info('Update group details submit succeeded', { groupId });
       router.back();
     } catch (err) {
       logger.error('Update group details submit failed', err, { groupId });

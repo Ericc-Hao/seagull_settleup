@@ -25,6 +25,8 @@ export function createChainableQuery(result: QueryResult): ChainableQuery {
     return builder;
   });
 
+  builder.delete = vi.fn(() => builder);
+
   builder.maybeSingle = vi.fn().mockResolvedValue(result);
   builder.single = vi.fn().mockResolvedValue(result);
 

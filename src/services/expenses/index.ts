@@ -11,21 +11,21 @@ export {
   getExpenseDetail,
   getExpenseDetailView,
   type ExpenseDetailResult,
-} from './expenses/expenseReadService';
+} from './expenseReadService';
 
 export {
   getCurrentUserMonthlyExpenseSummary,
   getExpensesSummary,
-} from './expenses/expenseSummaryService';
+} from './expenseSummaryService';
 
 export {
   createPersonalExpense,
   createSplitExpense,
   createExpense,
   updateExpense,
-} from './expenses/expenseWriteService';
+} from './expenseWriteService';
 
 export {
   deleteExpense,
   canDeleteExpense,
-} from './expenses/expenseDeleteService';
+} from './expenseDeleteService';

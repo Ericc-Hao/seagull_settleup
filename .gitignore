@@ -47,7 +47,6 @@ public/apple-app-site-association
 
 # EAS
 eas.json
-app.json
 
 # Supabase CLI local state
 supabase/.temp/

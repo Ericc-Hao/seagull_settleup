@@ -12,8 +12,14 @@
     },
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#EEF1FF",
+    "scheme": "seagullsplit",
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "origin": "https://split.seagullcoffee.ca"
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -34,10 +40,14 @@
     "ios": {
       "supportsTablet": true,
       "icon": "./assets/icon.png",
-      "bundleIdentifier": "com.anonymous.seagull-split",
+      "bundleIdentifier": "com.seagullsplit.app",
+      "associatedDomains": [
+        "applinks:split.seagullcoffee.ca"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "Allow Seagull Split to take receipt photos.",
-        "NSPhotoLibraryUsageDescription": "Allow Seagull Split to choose receipt images and profile photos from your photo library."
+        "NSPhotoLibraryUsageDescription": "Allow Seagull Split to choose receipt images and profile photos from your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -59,6 +69,12 @@
       "output": "static",
       "favicon": "./assets/icon.png",
       "backgroundColor": "#EEF1FF"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fd9a9a8a-ad07-456c-9e70-6dbe10eb32d6"
+      }
     }
   }
 }

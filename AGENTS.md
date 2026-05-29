@@ -237,21 +237,20 @@ When adding new migrations, use version timestamps after the latest applied remo
 Supported auth:
 
 - email/password
-- forgot password
-- Google OAuth
+- forgot password / reset password
 
-Google OAuth:
+Public email and recovery links use helpers in `src/lib/publicUrls.ts` and `supabase/functions/_shared/appUrls.ts`:
 
-- web callback: `https://split.seagullcoffee.ca/auth/callback`
-- native callback: `seagullsplit://auth/callback`
-- app scheme: `seagullsplit`
+- `getPasswordResetUrl()`
+- `getInvitationUrl(token)`
+- `getPublicWebBaseUrl()` / `getPublicAppUrl()`
 
-After Google login, call `ensureProfileExists()`.
-Create/update `public.profiles` from auth metadata:
+Do not hardcode production URLs in app or Edge Function code.
 
-- `display_name` from `full_name` / `name`
+After sign-up or login, call `ensureProfileExists()` to create/update `public.profiles`:
+
+- `display_name` from registration input or auth metadata
 - `email` from `user.email`
-- `avatar_url` from `avatar_url` / `picture`
 - `default_currency = CAD`
 
 Auth errors:
@@ -463,8 +462,6 @@ Required Supabase Dashboard → Authentication → URL Configuration:
 - Redirect URLs:
   - `https://split.seagullcoffee.ca/reset-password`
   - `https://split.seagullcoffee.ca/register`
-  - `https://split.seagullcoffee.ca/auth/callback`
-  - `seagullsplit://auth/callback` (native OAuth only — not for email links)
 
 ## iOS Universal Links (email deep links)
 
@@ -602,8 +599,7 @@ For auth changes:
 - wrong password
 - register validation
 - forgot password
-- Google OAuth web
-- Google OAuth iOS
+- reset password link
 - logout
 - stale session
 

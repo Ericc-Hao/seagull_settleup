@@ -1,7 +1,4 @@
-/**
- * Home uses this grid — not src/components/QuickActionCard.tsx.
- * Fixed 2x2 layout with explicit 50% cell widths for iOS.
- */
+/** Fixed 2x2 quick actions grid with explicit 50% cell widths for iOS. */
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import type { IconName } from '../Icon';

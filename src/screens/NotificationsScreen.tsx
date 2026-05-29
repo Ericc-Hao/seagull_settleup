@@ -172,8 +172,6 @@ export function NotificationsScreen() {
     if (notifications.length === 0 || clearingAll) {
       return;
     }
-    logger.info('Clear all notifications pressed', { count: notifications.length });
-    logger.info('Clear all confirmation opened');
     setClearAllModalVisible(true);
   }, [clearingAll, notifications.length]);
 

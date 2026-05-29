@@ -3,9 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppData } from '../context/AppDataContext';
 import { getAccessibleGroupOptions } from '../services/groupService';
 import type { GroupSelectorOption } from '../types/views';
-import { createLogger } from '../utils/logger';
-
-const logger = createLogger('useGroups');
 
 export function useGroups() {
   const { versions, ready } = useAppData();
@@ -25,14 +22,12 @@ export function useGroups() {
       setInitialLoading(true);
     }
 
-    logger.info('useGroups cache read started', { background });
     const data = getAccessibleGroupOptions();
     setGroups(data);
     hasLoadedOnceRef.current = true;
     setHasLoadedOnce(true);
     setInitialLoading(false);
     setRefreshing(false);
-    logger.info('useGroups cache read succeeded', { count: data.length });
   }, [ready]);
 
   useEffect(() => {

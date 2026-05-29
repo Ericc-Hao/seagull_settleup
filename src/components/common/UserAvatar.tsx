@@ -2,6 +2,7 @@ import { Image, Text, View } from 'react-native';
 
 import { colors, typography } from '../../theme';
 import { avatarInitials } from '../../utils/avatar';
+import { isPendingParticipant } from '../../utils/groupParticipants';
 
 export { avatarInitials } from '../../utils/avatar';
 
@@ -108,7 +109,7 @@ export function memberStatusLabel(
   if (role === 'owner') {
     return 'Owner';
   }
-  if (invitationStatus === 'pending') {
+  if (isPendingParticipant({ role, invitationStatus, participantType: 'member' })) {
     return 'Pending';
   }
   if (invitationStatus === 'declined') {
@@ -127,7 +128,7 @@ export function memberAvatarStatus(
   if (role === 'owner') {
     return 'owner';
   }
-  if (invitationStatus === 'pending') {
+  if (isPendingParticipant({ role, invitationStatus, participantType: 'member' })) {
     return 'pending';
   }
   if (invitationStatus === 'declined') {

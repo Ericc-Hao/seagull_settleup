@@ -112,15 +112,9 @@ export function ExpenseDetailScreen({
       : '/(tabs)/expenses';
 
   const openDeleteModal = useCallback(() => {
-    logger.info('Delete expense pressed', {
-      expenseId,
-      groupId: expense?.groupId,
-      type: expense?.type,
-    });
-    logger.info('Delete expense confirmation opened', { expenseId });
     setDeleteError(undefined);
     setShowDeleteModal(true);
-  }, [expense?.groupId, expense?.type, expenseId]);
+  }, [expenseId]);
 
   const handleDeleteConfirm = useCallback(async () => {
     setDeleting(true);

@@ -203,7 +203,7 @@ Password reset and invitation emails use normal HTTPS URLs — not `seagullsplit
 **iOS app configuration** (`app.json`):
 
 - Associated domain: `applinks:split.seagullcoffee.ca`
-- Custom scheme `seagullsplit` remains for in-app OAuth callbacks only — do not use it in emails.
+- Custom scheme `seagullsplit` in `app.json` is for deep linking infrastructure only — do not use it in emails.
 
 **Web deployment requirement:** GitHub Pages must serve the Apple App Site Association file at:
 

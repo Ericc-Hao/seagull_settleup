@@ -90,7 +90,6 @@ export function HomeScreen() {
         </Pressable>
       ) : null}
 
-      {/* Home uses components/home/QuickActionsGrid.tsx (not QuickActionCard). */}
       <View style={{ flexDirection: 'row', width: '100%' }}>
         <View style={{ width: '50%', paddingRight: 6, minWidth: 0 }}>
           <PrimaryButton

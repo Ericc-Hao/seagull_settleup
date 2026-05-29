@@ -19,16 +19,6 @@ export function isRecoverableAuthSessionError(error: unknown): boolean {
   return RECOVERABLE_SESSION_FRAGMENTS.some((fragment) => message.includes(fragment));
 }
 
-/** @deprecated Prefer isRecoverableAuthSessionError */
-export function isJwtTimingError(error: unknown): boolean {
-  return isRecoverableAuthSessionError(error);
-}
-
-/** @deprecated Prefer isRecoverableAuthSessionError */
-export function isRecoverableAuthError(error: unknown): boolean {
-  return isRecoverableAuthSessionError(error);
-}
-
 export function isInvalidCredentialsError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase();
   if (message.includes('invalid login credentials')) {

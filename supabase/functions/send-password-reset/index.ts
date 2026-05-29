@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildPasswordResetEmail } from '../_shared/emailTemplates.ts';
+import { getPasswordResetUrl } from '../_shared/appUrls.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,12 +38,8 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-const DEFAULT_PASSWORD_RESET_REDIRECT_URL = 'https://split.seagullcoffee.ca/reset-password';
-
 function resolvePasswordResetRedirectUrl(): string {
-  const redirectTo =
-    Deno.env.get('PASSWORD_RESET_REDIRECT_URL')?.trim() || DEFAULT_PASSWORD_RESET_REDIRECT_URL;
-  return redirectTo.replace(/\/+$/, '');
+  return getPasswordResetUrl();
 }
 
 function resolveEmailIconUrl(configuredUrl: string): string {

@@ -449,14 +449,11 @@ export function ScanReceiptScreen() {
   );
 
   const handleReplacePhotoPress = useCallback(() => {
-    logger.info('Receipt scan replace photo pressed');
     setShowReplaceChooser(true);
   }, []);
 
   const handleRemovePhoto = useCallback(() => {
-    logger.info('Receipt scan remove photo pressed');
     resetReceiptSelection();
-    logger.info('Receipt scan photo removed');
   }, [resetReceiptSelection]);
 
   const receiptConversionParams = useMemo(() => {
@@ -480,12 +477,6 @@ export function ScanReceiptScreen() {
     }
 
     setError(undefined);
-    logger.info('Receipt scan continue pressed', {
-      expenseType,
-      amountCents,
-      currency: targetCurrency,
-      hasReceipt: Boolean(receiptUri),
-    });
     router.push({
       pathname: '/add-expense',
       params: {

@@ -6,7 +6,6 @@ export { FormInputCard } from './FormInputCard';
 export { Icon, type IconName } from './Icon';
 export { OverviewCard } from './OverviewCard';
 export { PrimaryButton, PrimaryButtonRow } from './PrimaryButton';
-export { QuickActionCard } from './QuickActionCard';
 export { ScreenLayout } from './ScreenLayout';
 export { ScreenContainer } from './layout/ScreenContainer';
 export { TabPageHeader, SummaryOverviewCard, type SummaryStat } from './layout';

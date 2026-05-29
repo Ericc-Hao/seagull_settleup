@@ -45,7 +45,7 @@ export function SplitPreviewCard({
             email={member.email}
             initials={member.avatarLabel}
             size={32}
-            status={pending ? 'pending' : memberAvatarStatus(member.role, member.invitationStatus)}
+            status={memberAvatarStatus(member.role, member.invitationStatus)}
           />
           <Text style={[typography.body, { flex: 1, color: colors.textPrimary }]} numberOfLines={1}>
             {member.displayName}

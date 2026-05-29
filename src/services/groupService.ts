@@ -22,6 +22,7 @@ import {
 import {
   fetchGroupsForCurrentUser,
   getAccessibleGroupsForUser,
+  getGroupCardStatusLabel,
   isActiveGroupStatus,
   isGroupInactive,
 } from './groupAccess';
@@ -30,6 +31,7 @@ export {
   isGroupInactive,
   isGroupActiveForNewExpenses,
   canMutateGroup,
+  getGroupCardStatusLabel,
   INACTIVE_GROUP_EXPENSE_MESSAGE,
   INACTIVE_GROUP_MUTATION_MESSAGE,
 } from './groupAccess';
@@ -454,7 +456,7 @@ function mapGroupCard(
     name: group.name,
     memberCount: getGroupMembers(group.id, db).length,
     totalSpentCents,
-    statusLabel: group.status === 'inactive' ? 'Inactive' : group.status === 'ready_to_settle' ? 'Not Settled' : 'Active',
+    statusLabel: getGroupCardStatusLabel(group.status),
     balanceLabel: balanceSummary.label,
     balancePositive: balanceSummary.status === 'owed',
     balanceStatus: balanceSummary.status,
@@ -472,7 +474,7 @@ export function buildGroupCards(userId: string = getCurrentUserId()): GroupCardV
 export function buildInactiveGroupCards(userId: string = getCurrentUserId()): GroupCardView[] {
   const db = readDb();
   return getAccessibleGroupsForUser(userId, db)
-    .filter((group) => group.status === 'inactive')
+    .filter((group) => isGroupInactive(group))
     .map((group, index) => mapGroupCard(group, index, userId, db));
 }
 

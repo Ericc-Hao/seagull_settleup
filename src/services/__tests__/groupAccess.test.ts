@@ -11,6 +11,7 @@ import {
   isGroupActiveForNewExpenses,
   isGroupInactive,
   canMutateGroup,
+  getGroupCardStatusLabel,
   INACTIVE_GROUP_EXPENSE_MESSAGE,
   INACTIVE_GROUP_MUTATION_MESSAGE,
   userHasGroupAccess,
@@ -141,5 +142,12 @@ describe('groupAccess', () => {
     expect(canMutateGroup(group({ id: 'group-inactive', status: 'inactive' }))).toBe(false);
     expect(canMutateGroup(group({ id: 'group-active', status: 'active' }))).toBe(true);
     expect(canMutateGroup(group({ id: 'group-planning', status: 'planning' }))).toBe(true);
+  });
+
+  it('getGroupCardStatusLabel maps group status to card badge text', () => {
+    expect(getGroupCardStatusLabel('inactive')).toBe('Inactive');
+    expect(getGroupCardStatusLabel('ready_to_settle')).toBe('Not Settled');
+    expect(getGroupCardStatusLabel('active')).toBe('Active');
+    expect(getGroupCardStatusLabel('planning')).toBe('Active');
   });
 });

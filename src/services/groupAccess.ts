@@ -43,6 +43,17 @@ export function canMutateGroup(group: Pick<Group, 'status'>): boolean {
   return !isGroupInactive(group);
 }
 
+/** Groups list card status badge label. */
+export function getGroupCardStatusLabel(status: Group['status']): string {
+  if (status === 'inactive') {
+    return 'Inactive';
+  }
+  if (status === 'ready_to_settle') {
+    return 'Not Settled';
+  }
+  return 'Active';
+}
+
 export function isActiveMembership(member: GroupMember | undefined): boolean {
   if (!member) {
     return false;

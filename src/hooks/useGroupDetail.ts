@@ -6,6 +6,7 @@ import {
   fetchGroupById,
   getCurrentUserId,
   getGroupById,
+  isGroupInactive,
   reactivateGroup,
   setGroupInactive,
 } from '../services/groupService';
@@ -154,7 +155,7 @@ export function useGroupDetail(groupId: string) {
     if (!group) {
       return '';
     }
-    if (group.status === 'inactive') {
+    if (isGroupInactive(group)) {
       return 'Inactive';
     }
     return formatOptionalDateRange(group.startDate, group.endDate);
@@ -170,7 +171,7 @@ export function useGroupDetail(groupId: string) {
     isOwner,
     currentUserRole,
     currentUserId: userId,
-    isInactive: group?.status === 'inactive',
+    isInactive: group ? isGroupInactive(group) : false,
     dateLabel,
     totalSpentLabel: formatCAD(totalSpentCents),
     recentExpenses,

@@ -1,8 +1,9 @@
-const DEFAULT_PUBLIC_APP_URL = 'https://split.seagullcoffee.ca'; // keep in sync with src/lib/publicUrls.ts
+/** Default production web base — keep in sync with src/lib/publicUrls.ts */
+export const PUBLIC_APP_BASE_DEFAULT = 'https://split.seagullcoffee.ca';
 
 export function getPublicAppUrl(): string {
   const configured = Deno.env.get('PUBLIC_APP_URL')?.trim();
-  const base = configured || DEFAULT_PUBLIC_APP_URL;
+  const base = configured || PUBLIC_APP_BASE_DEFAULT;
   return base.replace(/\/+$/, '');
 }
 

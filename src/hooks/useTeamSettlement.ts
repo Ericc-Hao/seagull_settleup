@@ -56,11 +56,10 @@ export function useTeamSettlement(groupId: string, currentMemberId?: string) {
   );
 
   const openSelection = useCallback(() => {
-    logger.info('Settle together opened', { groupId });
     setStep('select');
     setPreviewTransfer(null);
     setSelectionVisible(true);
-  }, [groupId]);
+  }, []);
 
   const closeSelection = useCallback(() => {
     setSelectionVisible(false);
@@ -73,50 +72,36 @@ export function useTeamSettlement(groupId: string, currentMemberId?: string) {
       if (memberId === currentMemberId) {
         return;
       }
-      setSelectedMemberIds((current) => {
-        const next = current.includes(memberId)
-          ? current.filter((id) => id !== memberId)
-          : [...current, memberId];
-        logger.info('Team members selected', { groupId, count: next.length });
-        return next;
-      });
+      setSelectedMemberIds((current) =>
+        current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId],
+      );
     },
-    [currentMemberId, groupId],
+    [currentMemberId],
   );
 
   const selectMyself = useCallback(() => {
     if (!currentMemberId) {
       return;
     }
-    logger.info('Team members selected', { groupId, action: 'select_myself' });
     setSelectedMemberIds([currentMemberId]);
-  }, [currentMemberId, groupId]);
+  }, [currentMemberId]);
 
   const selectAll = useCallback(() => {
-    logger.info('Team members selected', { groupId, action: 'select_all' });
     setSelectedMemberIds(members.map((member) => member.id));
-  }, [groupId, members]);
+  }, [members]);
 
   const clearSelection = useCallback(() => {
-    logger.info('Team members selected', { groupId, action: 'clear' });
     setSelectedMemberIds(currentMemberId ? [currentMemberId] : []);
-  }, [currentMemberId, groupId]);
+  }, [currentMemberId]);
 
   const reviewTeamSettlement = useCallback(() => {
     if (validationError) {
       return;
     }
     setReviewing(true);
-    logger.info('Team settlement preview calculated started', { groupId, memberCount: selectedMemberIds.length });
     try {
       const preview = calculateTeamSettlementPreview(groupId, selectedMemberIds);
       setPreviewTransfer(preview);
-      logger.info('Team settlement preview calculated', {
-        groupId,
-        hasTransfer: Boolean(preview),
-        amountCents: preview?.amountCents,
-        requiresPayment: preview?.requiresPayment,
-      });
       setStep('preview');
     } finally {
       setReviewing(false);
@@ -127,10 +112,9 @@ export function useTeamSettlement(groupId: string, currentMemberId?: string) {
     if (!previewTransfer) {
       return;
     }
-    logger.info('Team settlement confirmation opened', { groupId });
     setSelectionVisible(false);
     setConfirmVisible(true);
-  }, [groupId, previewTransfer]);
+  }, [previewTransfer]);
 
   const cancelConfirm = useCallback(() => {
     setConfirmVisible(false);
@@ -144,8 +128,6 @@ export function useTeamSettlement(groupId: string, currentMemberId?: string) {
         return;
       }
       setConfirming(true);
-      const isZeroPayment = previewTransfer.zeroPayment ?? previewTransfer.amountCents === 0;
-      logger.info('Team settlement confirmation started', { groupId, zeroPayment: isZeroPayment });
       try {
         await markTeamTransferAsPaid({
           groupId,
@@ -153,11 +135,6 @@ export function useTeamSettlement(groupId: string, currentMemberId?: string) {
           selectedMemberIds,
           selectedMemberNames,
         });
-        if (isZeroPayment) {
-          logger.info('Zero-payment team settlement confirmed', { groupId });
-        } else {
-          logger.info('Paid team settlement confirmed', { groupId });
-        }
         setConfirmVisible(false);
         setSelectionVisible(false);
         setPreviewTransfer(null);

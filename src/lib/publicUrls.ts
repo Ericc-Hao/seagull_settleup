@@ -1,8 +1,9 @@
-const DEFAULT_PUBLIC_WEB_BASE = 'https://split.seagullcoffee.ca'; // keep in sync with supabase/functions/_shared/appUrls.ts
+/** Default production web base — keep in sync with supabase/functions/_shared/appUrls.ts */
+export const PUBLIC_WEB_BASE_DEFAULT = 'https://split.seagullcoffee.ca';
 
 /** Production web base URL (no trailing slash). Uses EXPO_PUBLIC_AUTH_REDIRECT_URL when set. */
 export function getPublicWebBaseUrl(): string {
-  return (process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL?.trim() || DEFAULT_PUBLIC_WEB_BASE).replace(/\/+$/, '');
+  return (process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL?.trim() || PUBLIC_WEB_BASE_DEFAULT).replace(/\/+$/, '');
 }
 
 export function getPasswordResetUrl(): string {

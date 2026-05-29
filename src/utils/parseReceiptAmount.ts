@@ -1,3 +1,8 @@
+/**
+ * Receipt amount parser for unit tests and offline validation.
+ * Runtime OCR uses the Edge Function copy — keep logic in sync with:
+ * supabase/functions/scan-receipt/parseReceiptAmount.ts
+ */
 export interface ReceiptAmountCandidate {
   label: string;
   amountCents: number;

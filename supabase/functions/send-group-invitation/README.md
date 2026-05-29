@@ -16,9 +16,7 @@ npx supabase secrets set PUBLIC_APP_URL=https://split.seagullcoffee.ca
 npx supabase secrets set EMAIL_ICON_URL=https://yljcebabixdakgwsvqtm.supabase.co/storage/v1/object/public/public-assets/brand/icon.png
 ```
 
-Invitation accept links use:
-
-`https://split.seagullcoffee.ca/register?invite={token}`
+Invitation accept links use `getInvitationUrl(token)` from `_shared/appUrls.ts`.
 
 ### Email icon
 

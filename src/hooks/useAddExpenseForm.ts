@@ -140,10 +140,6 @@ export function useAddExpenseForm(
   const isOwner = selectedGroupRecord?.ownerId === userId;
 
   useEffect(() => {
-    logger.info('Add expense screen opened', { initialGroupId, source: prefill?.source });
-  }, [initialGroupId, prefill?.source]);
-
-  useEffect(() => {
     if (initialGroupId) {
       setSelectedGroupId(initialGroupId);
     }
@@ -176,7 +172,6 @@ export function useAddExpenseForm(
   }, [kind, members, userId]);
 
   const selectGroup = useCallback((groupId: string) => {
-    logger.info('Group selected for expense', { groupId });
     setSelectedGroupId(groupId);
     setSubmitError(undefined);
   }, []);
@@ -300,7 +295,6 @@ export function useAddExpenseForm(
 
     try {
       if (kind === 'personal') {
-        logger.info('Create personal expense started');
         await createPersonalExpense({
           amountCents,
           currency: defaultCurrency,
@@ -312,7 +306,6 @@ export function useAddExpenseForm(
           receiptLocalUri: receiptUri,
           receiptConversion,
         });
-        logger.info('Create personal expense succeeded');
       } else {
         const splits =
           splitMethod === 'equal'
@@ -325,7 +318,6 @@ export function useAddExpenseForm(
                 shareAmountCents: customShareCentsByMember[memberId] ?? 0,
               }));
 
-        logger.info('Create split expense started', { groupId: selectedGroupId, splitCount: splits.length });
         await createSplitExpense({
           groupId: selectedGroupId!,
           payerMemberId,
@@ -341,7 +333,6 @@ export function useAddExpenseForm(
           receiptLocalUri: receiptUri,
           receiptConversion,
         });
-        logger.info('Create split expense succeeded', { groupId: selectedGroupId });
       }
 
       if (kind === 'personal') {
@@ -397,15 +388,9 @@ export function useAddExpenseForm(
     activeMembers: selectableMembers,
     payerMembers,
     payerMemberId,
-    setPayerMemberId: (id: string) => {
-      logger.info('Payer selected', { payerMemberId: id });
-      setPayerMemberId(id);
-    },
+    setPayerMemberId,
     splitMemberIds,
-    setSplitMemberIds: (ids: string[]) => {
-      logger.info('Split participants changed', { count: ids.length });
-      setSplitMemberIds(ids);
-    },
+    setSplitMemberIds,
     showSplitModal,
     setShowSplitModal,
     showInviteModal,

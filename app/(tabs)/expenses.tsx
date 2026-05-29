@@ -16,6 +16,7 @@ import { useExpensesData } from '../../src/hooks/useExpensesData';
 import { useStaleFocusRefresh } from '../../src/hooks/useStaleFocusRefresh';
 import { useNotifications } from '../../src/context/NotificationsContext';
 import { colors, layout, typography } from '../../src/theme';
+import { navigateToExpenseDetail } from '../../src/utils/navigation';
 
 export default function ExpensesTabScreen() {
   const { filter, setFilter, isEmpty, ...data } = useExpensesData();
@@ -91,7 +92,7 @@ export default function ExpensesTabScreen() {
                 categoryId={expense.categoryId}
                 label={expense.label}
                 value={expense.amount}
-                onPress={() => router.push(`/expense/${expense.id}`)}
+                onPress={() => navigateToExpenseDetail(expense.id, { from: 'expenses' })}
                 showDivider={index < personalItems.length - 1}
               />
             ))}
@@ -118,7 +119,7 @@ export default function ExpensesTabScreen() {
                 includedInSplit={expense.includedInSplit}
                 variant="expenses-tab"
                 showDivider={index < splitItems.length - 1}
-                onPress={(expenseId) => router.push(`/expense/${expenseId}`)}
+                onPress={(expenseId) => navigateToExpenseDetail(expenseId, { from: 'expenses' })}
               />
             ))}
           </SectionCard>

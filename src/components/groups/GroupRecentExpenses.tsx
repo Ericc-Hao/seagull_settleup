@@ -1,17 +1,19 @@
-import { router } from 'expo-router';
 import { View } from 'react-native';
 
 import type { RecentGroupExpenseView } from '../../types/views';
 import { layout } from '../../theme';
+import { navigateToExpenseDetail } from '../../utils/navigation';
 import { SplitExpenseCard } from '../expenses/SplitExpenseCard';
 import { EmptyStateCard } from '../EmptyStateCard';
 import { SectionCard, SectionTitle } from '../SectionCard';
 
 export function GroupRecentExpenses({
   expenses,
+  groupId,
   onAddExpense,
 }: {
   expenses: RecentGroupExpenseView[];
+  groupId: string;
   onAddExpense: () => void;
 }) {
   if (expenses.length === 0) {
@@ -47,7 +49,9 @@ export function GroupRecentExpenses({
             includedInSplit={expense.includedInSplit}
             variant="group-detail"
             showDivider={index < expenses.length - 1}
-            onPress={(expenseId) => router.push(`/expense/${expenseId}`)}
+            onPress={(expenseId) =>
+              navigateToExpenseDetail(expenseId, { from: 'group', groupId })
+            }
           />
         ))}
       </SectionCard>

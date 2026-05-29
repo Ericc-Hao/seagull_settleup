@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, View } from 'react-native';
 
@@ -25,15 +24,24 @@ import { formatDateForDisplay, parseSupabaseDate } from '../utils/date';
 import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
 import { invalidateAfterDeleteExpense } from '../utils/mutationInvalidation';
-import { safeBack } from '../utils/navigation';
+import {
+  navigateAfterDeleteExpense,
+  replaceToGroup,
+  safeBack,
+  type ExpenseDetailNavigationContext,
+} from '../utils/navigation';
 
 const logger = createLogger('ExpenseDetailScreen');
 
 interface ExpenseDetailScreenProps {
   expenseId: string;
+  navigationContext?: ExpenseDetailNavigationContext;
 }
 
-export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
+export function ExpenseDetailScreen({
+  expenseId,
+  navigationContext,
+}: ExpenseDetailScreenProps) {
   const { versions, invalidate } = useAppData();
   const [receipt, setReceipt] = useState<ExpenseReceiptView | null>(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
@@ -98,6 +106,11 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
     };
   }, [expenseId, versions.expenses, detail, expense?.receiptId]);
 
+  const expenseBackFallback =
+    navigationContext?.from === 'group' && navigationContext.groupId
+      ? (`/group/${navigationContext.groupId}` as const)
+      : '/(tabs)/expenses';
+
   const openDeleteModal = useCallback(() => {
     logger.info('Delete expense pressed', {
       expenseId,
@@ -108,17 +121,6 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
     setDeleteError(undefined);
     setShowDeleteModal(true);
   }, [expense?.groupId, expense?.type, expenseId]);
-
-  const navigateAfterDelete = useCallback(
-    (result: { groupId?: string | null; type?: 'personal' | 'split' }) => {
-      if (result.type === 'split' && result.groupId) {
-        router.replace(`/group/${result.groupId}`);
-        return;
-      }
-      router.replace('/(tabs)/expenses');
-    },
-    [],
-  );
 
   const handleDeleteConfirm = useCallback(async () => {
     setDeleting(true);
@@ -132,7 +134,7 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
       });
       setShowDeleteModal(false);
       Alert.alert('Expense deleted', 'This expense has been removed.');
-      navigateAfterDelete(result);
+      navigateAfterDeleteExpense(result, navigationContext);
     } catch (error) {
       const message = toUserFriendlyError(error, 'Unable to delete expense.');
       setDeleteError(message);
@@ -144,7 +146,7 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
     } finally {
       setDeleting(false);
     }
-  }, [expense?.groupId, expense?.type, expenseId, invalidate, navigateAfterDelete]);
+  }, [expense?.groupId, expense?.type, expenseId, invalidate, navigationContext]);
 
   if (!detail) {
     return (
@@ -154,7 +156,7 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
           <ScreenPageHeader
             title="Expense"
             subtitle="Expense not found."
-            onBack={() => safeBack('/(tabs)/expenses')}
+            onBack={() => safeBack(expenseBackFallback)}
           />
         }
       >
@@ -183,7 +185,7 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
           <ScreenPageHeader
             title={detail.label}
             subtitle={detail.categoryName}
-            onBack={() => safeBack('/(tabs)/expenses')}
+            onBack={() => safeBack(expenseBackFallback)}
             rightAction={
               canDelete ? (
                 <Pressable
@@ -311,7 +313,14 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
         {detail.groupId ? (
           <Text
             style={[typography.caption, { color: colors.primary, textAlign: 'center' }]}
-            onPress={() => router.push(`/group/${detail.groupId}`)}
+            onPress={() => {
+              const groupId = detail.groupId!;
+              if (navigationContext?.from === 'group' && navigationContext.groupId === groupId) {
+                safeBack(`/group/${groupId}`);
+                return;
+              }
+              replaceToGroup(groupId);
+            }}
           >
             View group
           </Text>

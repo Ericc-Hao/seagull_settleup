@@ -3,6 +3,7 @@ import { mapProfile } from '../lib/mappers';
 import { supabase } from '../lib/supabase';
 import type { UpdateProfileInput } from '../types/inputs';
 import type { Profile } from '../types/models';
+import { extensionForMimeType, readLocalFileForUpload } from '../utils/fileUpload';
 import { createLogger } from '../utils/logger';
 import { maskEmail } from '../utils/validation';
 import { readDb } from './dbHelpers';
@@ -146,12 +147,12 @@ export async function ensureProfileExists(): Promise<Profile | null> {
 export async function updateAvatar(userId: string, imageUri: string): Promise<string> {
   logger.info('Avatar upload started', { userId, table: 'storage.avatars' });
   try {
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
-    const path = `${userId}/avatar-${Date.now()}.jpg`;
+    const file = await readLocalFileForUpload(imageUri);
+    const extension = extensionForMimeType(file.mimeType);
+    const path = `${userId}/avatar-${Date.now()}.${extension}`;
 
-    const { error } = await supabase.storage.from('avatars').upload(path, blob, {
-      contentType: blob.type || 'image/jpeg',
+    const { error } = await supabase.storage.from('avatars').upload(path, file.arrayBuffer, {
+      contentType: file.mimeType,
       upsert: true,
     });
 

@@ -163,6 +163,7 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
 
         <GroupRecentExpenses
           expenses={detail.recentExpenses}
+          groupId={groupId}
           onAddExpense={() => router.push(`/add-expense?groupId=${groupId}`)}
         />
 

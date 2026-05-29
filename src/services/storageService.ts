@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { extensionForMimeType, readLocalFileForUpload } from '../utils/fileUpload';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('storageService');
@@ -14,17 +15,16 @@ export async function uploadReceiptImage(
   userId: string,
   expenseId: string,
   localUri: string,
+  mimeTypeHint?: string,
 ): Promise<UploadedFileResult> {
   logger.info('Receipt upload started', { userId, expenseId, bucket: 'receipts' });
   try {
-    const response = await fetch(localUri);
-    const blob = await response.blob();
-    const mimeType = blob.type || 'image/jpeg';
-    const extension = mimeType.includes('png') ? 'png' : 'jpg';
+    const file = await readLocalFileForUpload(localUri, mimeTypeHint);
+    const extension = extensionForMimeType(file.mimeType);
     const storagePath = `${userId}/${expenseId}/${Date.now()}.${extension}`;
 
-    const { error } = await supabase.storage.from('receipts').upload(storagePath, blob, {
-      contentType: mimeType,
+    const { error } = await supabase.storage.from('receipts').upload(storagePath, file.arrayBuffer, {
+      contentType: file.mimeType,
       upsert: false,
     });
 
@@ -36,8 +36,8 @@ export async function uploadReceiptImage(
     const result: UploadedFileResult = {
       storagePath,
       publicUrl: data.publicUrl || storagePath,
-      mimeType,
-      fileSize: blob.size,
+      mimeType: file.mimeType,
+      fileSize: file.byteLength,
     };
 
     logger.info('Receipt upload succeeded', { userId, expenseId, bucket: 'receipts' });

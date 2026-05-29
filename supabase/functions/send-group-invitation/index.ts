@@ -40,11 +40,10 @@ function buildInviterNameOrEmail(
   return 'Someone';
 }
 
-function buildInviteLink(token: string, inviteeHasAccount: boolean): string {
+function buildInviteLink(token: string): string {
   const publicAppUrl = Deno.env.get('PUBLIC_APP_URL') ?? 'https://split.seagullcoffee.ca';
   const normalizedBase = publicAppUrl.endsWith('/') ? publicAppUrl.slice(0, -1) : publicAppUrl;
-  const invitePath = inviteeHasAccount ? '/login' : '/register';
-  return `${normalizedBase}${invitePath}?invite=${encodeURIComponent(token)}`;
+  return `${normalizedBase}/register?invite=${encodeURIComponent(token)}`;
 }
 
 async function resolveInviteeHasAccount(
@@ -175,7 +174,7 @@ Deno.serve(async (req) => {
     );
     const token = invitation.token ?? invitationId;
     const inviteeHasAccount = await resolveInviteeHasAccount(adminClient, invitation);
-    const inviteLink = buildInviteLink(token, inviteeHasAccount);
+    const inviteLink = buildInviteLink(token);
 
     log('invite_link_built', {
       invitationId,

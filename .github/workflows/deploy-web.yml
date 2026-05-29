@@ -19,6 +19,8 @@ jobs:
     env:
       EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      IOS_BUNDLE_IDENTIFIER: com.seagullsplit.app
 
     steps:
       - name: Ensure workflow runs from main branch
@@ -41,18 +43,21 @@ jobs:
         run: npm ci
 
       - name: Build Expo Web
-        run: npx expo export -p web
+        run: npm run web:build
 
       - name: Verify Expo Web output
         run: |
           ls -la dist
           test -f dist/index.html || (echo "dist/index.html not found. Expo web export failed or output path is wrong." && exit 1)
+          test -f dist/.well-known/apple-app-site-association || (echo "dist/.well-known/apple-app-site-association not found. Universal Links AASA file missing." && exit 1)
 
       - name: Add GitHub Pages files
         run: |
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
           echo "split.seagullcoffee.ca" > dist/CNAME
+          ls -la dist/.well-known
+          test -f dist/.nojekyll || (echo "dist/.nojekyll missing." && exit 1)
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

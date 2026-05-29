@@ -462,8 +462,46 @@ Required Supabase Dashboard → Authentication → URL Configuration:
 - Site URL: `https://split.seagullcoffee.ca`
 - Redirect URLs:
   - `https://split.seagullcoffee.ca/reset-password`
+  - `https://split.seagullcoffee.ca/register`
   - `https://split.seagullcoffee.ca/auth/callback`
-  - `seagullsplit://auth/callback`
+  - `seagullsplit://auth/callback` (native OAuth only — not for email links)
+
+## iOS Universal Links (email deep links)
+
+Email links use HTTPS Universal Links with automatic web fallback. Do **not** use `seagullsplit://` links in emails.
+
+| Flow | URL |
+|------|-----|
+| Password reset | `https://split.seagullcoffee.ca/reset-password?token_hash=...&type=recovery` |
+| Invitation | `https://split.seagullcoffee.ca/register?invite={token}` |
+
+iOS app (`app.json`):
+
+- `ios.associatedDomains`: `applinks:split.seagullcoffee.ca`
+- `ios.bundleIdentifier`: `com.seagullsplit.app`
+- `scheme`: `seagullsplit` (OAuth callbacks only)
+
+Required hosted files (GitHub Pages):
+
+- `public/.well-known/apple-app-site-association` → copied to `dist/.well-known/apple-app-site-association`
+- `dist/.nojekyll` (so GitHub Pages serves `.well-known`)
+
+Generate AASA before web export:
+
+```bash
+APPLE_TEAM_ID=YOUR_TEAM_ID npm run web:build
+```
+
+GitHub Actions secret: `APPLE_TEAM_ID`
+
+Universal Links require:
+
+- Apple Developer Team ID
+- iOS bundle identifier
+- new native iOS build (not Expo Go)
+- deployed AASA file over HTTPS with no redirect
+
+Test from Mail/Notes/Messages — not by pasting into Safari’s address bar.
 
 Required Supabase Dashboard → Authentication → Providers → Email → **Email OTP Expiration**:
 

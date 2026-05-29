@@ -166,6 +166,7 @@ Supported sign-in methods:
 Go to **Authentication → URL Configuration → Redirect URLs** and add:
 
 - `https://split.seagullcoffee.ca/reset-password`
+- `https://split.seagullcoffee.ca/register`
 
 Also set **Site URL** to `https://split.seagullcoffee.ca` for production web.
 
@@ -189,6 +190,44 @@ Add `EXPO_PUBLIC_AUTH_REDIRECT_URL=https://split.seagullcoffee.ca` to your local
 2. The `send-password-reset` Edge Function sends a branded Resend email with redirect `https://split.seagullcoffee.ca/reset-password`.
 3. `/reset-password` exchanges the recovery code, verifies a session exists, then allows `updateUser({ password })`.
 4. If the link is missing or expired (`otp_expired`), the UI shows a clean message: “This reset link is invalid or has expired. Please request a new password reset email.” — no redirect to Home.
+
+### Email links (HTTPS Universal Links)
+
+Password reset and invitation emails use normal HTTPS URLs — not `seagullsplit://` custom scheme links. Universal Links open the iOS app when installed and fall back to the web app in Safari otherwise.
+
+| Flow | Email URL |
+|------|-----------|
+| Password reset | `https://split.seagullcoffee.ca/reset-password?token_hash=...&type=recovery` |
+| Group invitation | `https://split.seagullcoffee.ca/register?invite={token}` |
+
+**iOS app configuration** (`app.json`):
+
+- Associated domain: `applinks:split.seagullcoffee.ca`
+- Custom scheme `seagullsplit` remains for in-app OAuth callbacks only — do not use it in emails.
+
+**Web deployment requirement:** GitHub Pages must serve the Apple App Site Association file at:
+
+- `https://split.seagullcoffee.ca/.well-known/apple-app-site-association`
+
+The web build generates this file from `scripts/generate-aasa.mjs` using your Apple Developer Team ID. Also keep `dist/.nojekyll` so GitHub Pages serves `.well-known`.
+
+Set locally (optional, for `npm run web:build`):
+
+```bash
+# .env
+APPLE_TEAM_ID=YOUR_APPLE_DEVELOPER_TEAM_ID
+```
+
+Add the same value as a GitHub Actions secret (`APPLE_TEAM_ID`) for production web deploys.
+
+**Universal Links require a new native iOS build** (development build, TestFlight, or production). Expo Go does not fully test Universal Links.
+
+**Testing (device with app installed):**
+
+1. Confirm AASA loads with no redirect: `https://split.seagullcoffee.ca/.well-known/apple-app-site-association`
+2. Send a password reset or invitation email and tap the link from Mail (not by pasting into Safari’s address bar).
+3. With the app installed → opens the app on `/reset-password` or `/register` with query params preserved.
+4. Without the app installed → opens the web page.
 
 ### Auth testing checklist
 
@@ -231,6 +270,7 @@ Add these repository secrets for the web build workflow:
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `EXPO_PUBLIC_AUTH_REDIRECT_URL` (e.g. `https://split.seagullcoffee.ca`)
+- `APPLE_TEAM_ID` (Apple Developer Team ID for Universal Links AASA file generation)
 
 Do not add service role keys, Resend keys, or other private secrets to GitHub Actions for the web app build.
 
@@ -253,7 +293,7 @@ Create a DNS CNAME record:
 
 Replace `USERNAME` with the GitHub username or organization that owns the repository.
 
-The deploy workflow writes `dist/CNAME`, `dist/.nojekyll`, and copies `dist/index.html` to `dist/404.html` so GitHub Pages serves the Expo app for deep links and unknown paths.
+The deploy workflow writes `dist/CNAME`, `dist/.nojekyll`, and copies `dist/index.html` to `dist/404.html` so GitHub Pages serves the Expo app for deep links and unknown paths. It also verifies `dist/.well-known/apple-app-site-association` is present for iOS Universal Links.
 
 ### Web routing
 

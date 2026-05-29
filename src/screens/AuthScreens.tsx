@@ -20,6 +20,10 @@ import { ShadowSurface } from '../components/layout/ShadowSurface';
 import { useAuth } from '../context/AuthContext';
 import { useInvitationPreview } from '../hooks/useInvitationPreview';
 import { useInviteRouteParam } from '../hooks/useInviteRouteParam';
+import {
+  useRecoveryLinkErrorParam,
+  useRecoveryTokenHashParam,
+} from '../hooks/useRecoveryRouteParams';
 import { setPendingInviteToken } from '../lib/pendingInviteToken';
 import { supabase } from '../lib/supabase';
 import {
@@ -29,8 +33,6 @@ import {
   hasRecoveryCodeInUrl,
   isExpiredRecoveryError,
   isRecoveryLinkExpiredError,
-  parseRecoveryLinkErrorFromUrl,
-  parseRecoveryTokenHashFromUrl,
   RECOVERY_LINK_EXPIRED_MESSAGE,
   signOutLocal,
   verifyRecoveryTokenHash,
@@ -342,7 +344,7 @@ export function WelcomeScreen() {
   return (
     <AuthCard title="Seagull Split" subtitle="Track spending. Split bills. Settle in CAD." compact>
       {sessionNotice ? <NoticeText message={sessionNotice} onDismiss={clearSessionNotice} /> : null}
-      <PrimaryButton label="Create Account" onPress={() => router.push('/(auth)/register')} />
+      <PrimaryButton label="Create Account" onPress={() => router.push('/register')} />
       <SecondaryButton label="Log In" variant="filled" onPress={() => router.push('/(auth)/login')} />
     </AuthCard>
   );
@@ -725,6 +727,8 @@ export function ForgotPasswordScreen() {
 
 export function ResetPasswordScreen() {
   const { authInitialized, session } = useAuth();
+  const recoveryTokenHash = useRecoveryTokenHashParam();
+  const recoveryLinkError = useRecoveryLinkErrorParam();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
@@ -737,23 +741,32 @@ export function ResetPasswordScreen() {
   const [continuing, setContinuing] = useState(false);
 
   useEffect(() => {
+    if (recoveryTokenHash) {
+      setPendingTokenHash(recoveryTokenHash);
+    }
+  }, [recoveryTokenHash]);
+
+  useEffect(() => {
+    if (isRecoveryLinkExpiredError(recoveryLinkError)) {
+      setExpiredLinkMessage(RECOVERY_LINK_EXPIRED_MESSAGE);
+      setHasRecoverySession(false);
+      setSessionChecked(true);
+    }
+  }, [recoveryLinkError]);
+
+  useEffect(() => {
     if (!authInitialized) {
+      return;
+    }
+
+    if (isRecoveryLinkExpiredError(recoveryLinkError)) {
       return;
     }
 
     void (async () => {
       try {
         if (Platform.OS === 'web') {
-          const linkError = parseRecoveryLinkErrorFromUrl();
-          if (isRecoveryLinkExpiredError(linkError)) {
-            setExpiredLinkMessage(RECOVERY_LINK_EXPIRED_MESSAGE);
-            setHasRecoverySession(false);
-            return;
-          }
-
-          const tokenHash = parseRecoveryTokenHashFromUrl();
-          if (tokenHash) {
-            setPendingTokenHash(tokenHash);
+          if (recoveryTokenHash) {
             setHasRecoverySession(false);
             return;
           }
@@ -761,7 +774,11 @@ export function ResetPasswordScreen() {
           if (hasRecoveryCodeInUrl()) {
             await exchangeRecoveryCodeFromUrl();
           }
+        } else if (recoveryTokenHash) {
+          setHasRecoverySession(false);
+          return;
         }
+
         const { data, error } = await supabase.auth.getSession();
         if (error) {
           authUiLogger.warn('Reset password session check failed', {
@@ -783,7 +800,7 @@ export function ResetPasswordScreen() {
         setSessionChecked(true);
       }
     })();
-  }, [authInitialized]);
+  }, [authInitialized, recoveryLinkError, recoveryTokenHash]);
 
   const handleContinueRecovery = async () => {
     if (!pendingTokenHash) {

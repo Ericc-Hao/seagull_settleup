@@ -41,7 +41,25 @@ yarn-error.*
 /ios
 /android
 
+# Generated Universal Links AASA (requires APPLE_TEAM_ID at build time)
+public/.well-known/
+public/apple-app-site-association
+
+# EAS
+eas.json
+app.json
+
 # Supabase CLI local state
 supabase/.temp/
 supabase/.branches/
 supabase/supabase/
+
+# Builds
+build/
+
+# IDEs
+.vscode/
+.idea/
+.cursor/
+
+npm

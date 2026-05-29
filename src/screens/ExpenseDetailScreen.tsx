@@ -1,18 +1,28 @@
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, Text, View } from 'react-native';
 
+import { Icon } from '../components/Icon';
 import { ScreenLayout, ScreenPageHeader, SectionCard, SectionTitle } from '../components';
 import { CategoryIconBadge } from '../components/expenses/CategoryIconBadge';
+import { DeleteExpenseModal } from '../components/expenses/DeleteExpenseModal';
 import { ReceiptPreviewCard } from '../components/expenses/ReceiptPreviewCard';
 import { ReceiptViewerModal } from '../components/expenses/ReceiptViewerModal';
 import { UserAvatar } from '../components/common/UserAvatar';
 import { useAppData } from '../context/AppDataContext';
-import { getExpenseById, getExpenseDetail, getExpenseDetailView } from '../services/expenseService';
+import {
+  canDeleteExpense,
+  deleteExpense,
+  getExpenseById,
+  getExpenseDetail,
+  getExpenseDetailView,
+} from '../services/expenseService';
 import { colors, layout, spacing, typography } from '../theme';
 import type { ExpenseReceiptView } from '../types/views';
 import { formatDateForDisplay, parseSupabaseDate } from '../utils/date';
+import { toUserFriendlyError } from '../utils/errors';
 import { createLogger } from '../utils/logger';
+import { invalidateAfterDeleteExpense } from '../utils/mutationInvalidation';
 import { safeBack } from '../utils/navigation';
 
 const logger = createLogger('ExpenseDetailScreen');
@@ -22,13 +32,17 @@ interface ExpenseDetailScreenProps {
 }
 
 export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
-  const { versions } = useAppData();
+  const { versions, invalidate } = useAppData();
   const [receipt, setReceipt] = useState<ExpenseReceiptView | null>(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | undefined>();
 
   const detail = useMemo(() => getExpenseDetailView(expenseId), [expenseId, versions.expenses]);
   const expense = useMemo(() => getExpenseById(expenseId), [expenseId, versions.expenses]);
+  const canDelete = useMemo(() => canDeleteExpense(expenseId), [expenseId, versions.expenses]);
 
   useEffect(() => {
     let mounted = true;
@@ -82,6 +96,54 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
     };
   }, [expenseId, versions.expenses, detail, expense?.receiptId]);
 
+  const openDeleteModal = useCallback(() => {
+    logger.info('Delete expense pressed', {
+      expenseId,
+      groupId: expense?.groupId,
+      type: expense?.type,
+    });
+    logger.info('Delete expense confirmation opened', { expenseId });
+    setDeleteError(undefined);
+    setShowDeleteModal(true);
+  }, [expense?.groupId, expense?.type, expenseId]);
+
+  const navigateAfterDelete = useCallback(
+    (result: { groupId?: string | null; type?: 'personal' | 'split' }) => {
+      if (result.type === 'split' && result.groupId) {
+        router.replace(`/group/${result.groupId}`);
+        return;
+      }
+      router.replace('/(tabs)/expenses');
+    },
+    [],
+  );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    setDeleting(true);
+    setDeleteError(undefined);
+    try {
+      const result = await deleteExpense(expenseId);
+      invalidateAfterDeleteExpense(invalidate, {
+        expenseId: result.expenseId,
+        groupId: result.groupId ?? undefined,
+        type: result.type,
+      });
+      setShowDeleteModal(false);
+      Alert.alert('Expense deleted', 'This expense has been removed.');
+      navigateAfterDelete(result);
+    } catch (error) {
+      const message = toUserFriendlyError(error, 'Unable to delete expense.');
+      setDeleteError(message);
+      logger.error('Delete expense failed', error, {
+        expenseId,
+        groupId: expense?.groupId,
+        type: expense?.type,
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }, [expense?.groupId, expense?.type, expenseId, invalidate, navigateAfterDelete]);
+
   if (!detail) {
     return (
       <ScreenLayout
@@ -104,131 +166,187 @@ export function ExpenseDetailScreen({ expenseId }: ExpenseDetailScreenProps) {
   const showReceiptSection = receiptLoading || Boolean(receiptUrl);
 
   return (
-    <ScreenLayout
-      bottomTabPadding={false}
-      header={
-        <ScreenPageHeader
-          title={detail.label}
-          subtitle={detail.categoryName}
-          onBack={() => safeBack('/(tabs)/expenses')}
-        />
-      }
-    >
-      <SectionCard>
-        <View style={{ padding: layout.cardPadding, gap: spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-            <CategoryIconBadge categoryName={detail.categoryName} size="md" />
-            <View style={{ flex: 1 }}>
-              <Text style={typography.bodyMedium}>{detail.label}</Text>
-              <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
-                {detail.categoryName}
-              </Text>
+    <>
+      <ScreenLayout
+        bottomTabPadding={false}
+        header={
+          <ScreenPageHeader
+            title={detail.label}
+            subtitle={detail.categoryName}
+            onBack={() => safeBack('/(tabs)/expenses')}
+            rightAction={
+              canDelete ? (
+                <Pressable
+                  onPress={openDeleteModal}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete expense"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: colors.white,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name="trash" size={20} color={colors.danger} strokeWidth={1.5} />
+                </Pressable>
+              ) : undefined
+            }
+          />
+        }
+      >
+        <SectionCard>
+          <View style={{ padding: layout.cardPadding, gap: spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <CategoryIconBadge categoryName={detail.categoryName} size="md" />
+              <View style={{ flex: 1 }}>
+                <Text style={typography.bodyMedium}>{detail.label}</Text>
+                <Text style={[typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+                  {detail.categoryName}
+                </Text>
+              </View>
             </View>
-          </View>
 
-          {detail.groupName ? (
+            {detail.groupName ? (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>Group</Text>
+                <Text style={typography.bodyMedium}>{detail.groupName}</Text>
+              </View>
+            ) : null}
+
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={[typography.caption, { color: colors.textSecondary }]}>Group</Text>
-              <Text style={typography.bodyMedium}>{detail.groupName}</Text>
+              <Text style={[typography.caption, { color: colors.textSecondary }]}>Date</Text>
+              <Text style={typography.bodyMedium}>{dateLabel}</Text>
             </View>
-          ) : null}
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={[typography.caption, { color: colors.textSecondary }]}>Date</Text>
-            <Text style={typography.bodyMedium}>{dateLabel}</Text>
+            <View
+              style={{
+                borderTopWidth: 1,
+                borderTopColor: colors.borderSubtle,
+                paddingTop: spacing.md,
+                gap: spacing.sm,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>Total</Text>
+                <Text style={typography.sectionTitle}>{detail.totalAmountDisplay}</Text>
+              </View>
+
+              {detail.myShareAmountDisplay ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={[typography.caption, { color: colors.textSecondary }]}>Your share</Text>
+                  <Text style={typography.bodyMedium}>{detail.myShareAmountDisplay}</Text>
+                </View>
+              ) : null}
+
+              {detail.payerName ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={[typography.caption, { color: colors.textSecondary }]}>Paid by</Text>
+                  <Text style={typography.bodyMedium}>{detail.payerName}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
+        </SectionCard>
 
-          <View
-            style={{
-              borderTopWidth: 1,
-              borderTopColor: colors.borderSubtle,
-              paddingTop: spacing.md,
-              gap: spacing.sm,
-            }}
+        {showReceiptSection ? (
+          <ReceiptPreviewCard
+            receiptUrl={receiptUrl}
+            fileName={receipt?.fileName}
+            loading={receiptLoading}
+            onPress={receiptUrl ? () => setViewerVisible(true) : undefined}
+          />
+        ) : null}
+
+        {detail.type === 'split' && detail.splits.length > 0 ? (
+          <View style={{ gap: layout.cardGap }}>
+            <SectionTitle title="Split between" />
+            <SectionCard>
+              {detail.splits.map((split, index) => (
+                <View
+                  key={split.memberId}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.sm,
+                    paddingHorizontal: layout.cardPadding,
+                    paddingVertical: 14,
+                    borderBottomWidth: index < detail.splits.length - 1 ? 1 : 0,
+                    borderBottomColor: colors.borderSubtle,
+                  }}
+                >
+                  <UserAvatar
+                    avatarUrl={split.avatarUrl}
+                    displayName={split.displayName}
+                    initials={split.avatarLabel}
+                    size={36}
+                    status={split.isPending ? 'pending' : undefined}
+                  />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={typography.bodyMedium}>{split.displayName}</Text>
+                    {split.isPending ? (
+                      <Text style={[typography.caption, { color: '#F59E0B' }]}>Pending</Text>
+                    ) : null}
+                  </View>
+                  <Text style={typography.bodyMedium}>{split.shareAmountDisplay}</Text>
+                </View>
+              ))}
+            </SectionCard>
+          </View>
+        ) : null}
+
+        {detail.groupId ? (
+          <Text
+            style={[typography.caption, { color: colors.primary, textAlign: 'center' }]}
+            onPress={() => router.push(`/group/${detail.groupId}`)}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={[typography.caption, { color: colors.textSecondary }]}>Total</Text>
-              <Text style={typography.sectionTitle}>{detail.totalAmountDisplay}</Text>
-            </View>
+            View group
+          </Text>
+        ) : null}
 
-            {detail.myShareAmountDisplay ? (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>Your share</Text>
-                <Text style={typography.bodyMedium}>{detail.myShareAmountDisplay}</Text>
-              </View>
-            ) : null}
-
-            {detail.payerName ? (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>Paid by</Text>
-                <Text style={typography.bodyMedium}>{detail.payerName}</Text>
-              </View>
+        {canDelete ? (
+          <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+            <SectionTitle title="Actions" />
+            <Pressable
+              onPress={openDeleteModal}
+              style={{
+                borderRadius: layout.cardRadius,
+                backgroundColor: colors.white,
+                borderWidth: 1,
+                borderColor: colors.borderSubtle,
+                paddingVertical: 14,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={[typography.bodyMedium, { color: colors.danger }]}>Delete Expense</Text>
+            </Pressable>
+            {deleteError ? (
+              <Text style={[typography.caption, { color: colors.danger, textAlign: 'center' }]}>{deleteError}</Text>
             ) : null}
           </View>
-        </View>
-      </SectionCard>
+        ) : null}
 
-      {showReceiptSection ? (
-        <ReceiptPreviewCard
+        <ReceiptViewerModal
+          visible={viewerVisible}
           receiptUrl={receiptUrl}
           fileName={receipt?.fileName}
-          loading={receiptLoading}
-          onPress={receiptUrl ? () => setViewerVisible(true) : undefined}
+          onClose={() => setViewerVisible(false)}
         />
-      ) : null}
+      </ScreenLayout>
 
-      {detail.type === 'split' && detail.splits.length > 0 ? (
-        <View style={{ gap: layout.cardGap }}>
-          <SectionTitle title="Split between" />
-          <SectionCard>
-            {detail.splits.map((split, index) => (
-              <View
-                key={split.memberId}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.sm,
-                  paddingHorizontal: layout.cardPadding,
-                  paddingVertical: 14,
-                  borderBottomWidth: index < detail.splits.length - 1 ? 1 : 0,
-                  borderBottomColor: colors.borderSubtle,
-                }}
-              >
-                <UserAvatar
-                  avatarUrl={split.avatarUrl}
-                  displayName={split.displayName}
-                  initials={split.avatarLabel}
-                  size={36}
-                  status={split.isPending ? 'pending' : undefined}
-                />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={typography.bodyMedium}>{split.displayName}</Text>
-                  {split.isPending ? (
-                    <Text style={[typography.caption, { color: '#F59E0B' }]}>Pending</Text>
-                  ) : null}
-                </View>
-                <Text style={typography.bodyMedium}>{split.shareAmountDisplay}</Text>
-              </View>
-            ))}
-          </SectionCard>
-        </View>
-      ) : null}
-
-      {detail.groupId ? (
-        <Text
-          style={[typography.caption, { color: colors.primary, textAlign: 'center' }]}
-          onPress={() => router.push(`/group/${detail.groupId}`)}
-        >
-          View group
-        </Text>
-      ) : null}
-
-      <ReceiptViewerModal
-        visible={viewerVisible}
-        receiptUrl={receiptUrl}
-        fileName={receipt?.fileName}
-        onClose={() => setViewerVisible(false)}
+      <DeleteExpenseModal
+        visible={showDeleteModal}
+        loading={deleting}
+        onCancel={() => {
+          if (!deleting) {
+            setShowDeleteModal(false);
+            setDeleteError(undefined);
+          }
+        }}
+        onConfirm={() => void handleDeleteConfirm()}
       />
-    </ScreenLayout>
+    </>
   );
 }

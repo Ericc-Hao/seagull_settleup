@@ -8,9 +8,8 @@ import type { SplitPreviewRow } from '../components/expenses/SplitPreviewCard';
 import { getCachedCategories } from '../services/categoryService';
 import { createPersonalExpense, createSplitExpense } from '../services/expenseService';
 import { getCurrentUserId, getGroupById } from '../services/groupService';
-import { getGroupMembersWithProfiles } from '../services/memberService';
 import type { ExpenseType, SplitMethod } from '../types/models';
-import type { GroupMemberWithProfile, GroupSelectorOption } from '../types/views';
+import type { GroupSelectorOption } from '../types/views';
 import { getCategoryPickerOptions, resolveCategoryForSave } from '../utils/category';
 import { isoNow } from '../utils/date';
 import { toUserFriendlyError } from '../utils/errors';
@@ -21,7 +20,8 @@ import {
 } from '../utils/mutationInvalidation';
 import { addCents, dollarsToCents, formatAmountInputValue, splitAmountEvenly } from '../utils/money';
 
-import { filterSplitSelectableMembers, isSplitSelectableMember } from '../utils/groupParticipants';
+import { isSplitSelectableMember } from '../utils/groupParticipants';
+import { useGroupParticipants } from './useGroupParticipants';
 
 const logger = createLogger('useAddExpenseForm');
 
@@ -61,8 +61,13 @@ export function useAddExpenseForm(
 
   const [kind, setKind] = useState<ExpenseType>(prefill?.expenseType ?? 'split');
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(initialGroupId);
-  const [members, setMembers] = useState<GroupMemberWithProfile[]>([]);
-  const [membersLoading, setMembersLoading] = useState(false);
+  const participantGroupId = kind === 'split' ? selectedGroupId : undefined;
+  const {
+    members,
+    loading: membersLoading,
+    refreshing: membersRefreshing,
+    refresh: refreshMembers,
+  } = useGroupParticipants(participantGroupId, 'split');
 
   const [amountText, setAmountText] = useState(
     prefill?.amountCents && prefill.amountCents > 0 ? formatAmountInputValue(prefill.amountCents) : '',
@@ -106,7 +111,7 @@ export function useAddExpenseForm(
     [groupsQuery.groups, selectedGroupId],
   );
 
-  const selectableMembers = useMemo(() => filterSplitSelectableMembers(members), [members]);
+  const selectableMembers = members;
   const payerMembers = selectableMembers;
 
   const selectedGroupRecord = selectedGroupId ? getGroupById(selectedGroupId) : undefined;
@@ -122,42 +127,31 @@ export function useAddExpenseForm(
     }
   }, [initialGroupId]);
 
-  const loadMembers = useCallback(async (groupId: string) => {
-    setMembersLoading(true);
-    logger.info('Group members fetch started', { groupId });
-    try {
-      const rows = await getGroupMembersWithProfiles(groupId);
-      const selectable = filterSplitSelectableMembers(rows);
-      setMembers(selectable);
-      const selectableIds = selectable.map((m) => m.id);
-      setSplitMemberIds(selectableIds);
-
-      const currentMember = selectable.find((m) => m.userId === userId && isSplitSelectableMember(m));
-      setPayerMemberId(currentMember?.id ?? selectableIds[0] ?? '');
-
-      const equalMap: Record<string, string> = {};
-      for (const id of selectableIds) {
-        equalMap[id] = '';
-      }
-      setCustomAmounts(equalMap);
-
-      logger.info('Group members fetch succeeded', { groupId, count: selectable.length });
-    } catch (error) {
-      logger.error('Group members fetch failed', error, { groupId });
-      setMembers([]);
-      setSplitMemberIds([]);
-      setPayerMemberId('');
-    } finally {
-      setMembersLoading(false);
-    }
-  }, [userId]);
-
   useEffect(() => {
-    if (kind !== 'split' || !selectedGroupId) {
+    if (kind !== 'split' || members.length === 0) {
       return;
     }
-    void loadMembers(selectedGroupId);
-  }, [kind, selectedGroupId, loadMembers]);
+
+    const selectableIds = members.map((member) => member.id);
+    setSplitMemberIds((current) => {
+      const retained = current.filter((id) => selectableIds.includes(id));
+      return retained.length > 0 ? retained : selectableIds;
+    });
+    setPayerMemberId((current) =>
+      current && selectableIds.includes(current)
+        ? current
+        : members.find((member) => member.userId === userId && isSplitSelectableMember(member))?.id ??
+            selectableIds[0] ??
+            '',
+    );
+    setCustomAmounts((current) => {
+      const next: Record<string, string> = {};
+      for (const id of selectableIds) {
+        next[id] = current[id] ?? '';
+      }
+      return next;
+    });
+  }, [kind, members, userId]);
 
   const selectGroup = useCallback((groupId: string) => {
     logger.info('Group selected for expense', { groupId });
@@ -270,13 +264,6 @@ export function useAddExpenseForm(
     }
   }, [splitMethod, amountCents, splitMemberIds, customAmounts, resetEqualCustom]);
 
-  const refreshMembers = useCallback(async () => {
-    if (!selectedGroupId) {
-      return;
-    }
-    await loadMembers(selectedGroupId);
-  }, [loadMembers, selectedGroupId]);
-
   const save = useCallback(async () => {
     if (!canSave) {
       setSubmitError(validationError);
@@ -378,6 +365,7 @@ export function useAddExpenseForm(
     setShowGroupModal,
     members,
     membersLoading,
+    membersRefreshing,
     activeMembers: selectableMembers,
     payerMembers,
     payerMemberId,

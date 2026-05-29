@@ -29,7 +29,7 @@ import {
   getGroupMembers,
   readDb,
 } from './dbHelpers';
-import { getCurrentUserId } from './groupService';
+import { getCurrentUserId, getGroupById } from './groupService';
 import { createReceipt, getExpenseReceiptView, toExpenseReceiptView } from './receiptService';
 import { getSettleableMembersWithProfiles, getCurrentUserGroupBalanceSummary } from './settlementService';
 import { resolveMemberWithProfile } from './memberService';
@@ -197,7 +197,9 @@ function getMySplitShareCents(
 }
 
 export function memberHasExpenseParticipation(memberId: string, db = readDb()): boolean {
-  const asPayer = db.expenses.some((expense) => expense.payerMemberId === memberId);
+  const asPayer = db.expenses.some(
+    (expense) => !expense.deletedAt && expense.payerMemberId === memberId,
+  );
   const asSplit = db.expenseSplits.some((split) => split.memberId === memberId);
   return asPayer || asSplit;
 }
@@ -743,16 +745,65 @@ export async function updateExpense(expenseId: string, input: UpdateExpenseInput
   return updated;
 }
 
-export async function deleteExpense(expenseId: string): Promise<void> {
-  logger.info('Delete expense started', { table: 'expenses', expenseId });
+export async function deleteExpense(
+  expenseId: string,
+): Promise<{ expenseId: string; groupId?: string | null; type?: Expense['type'] }> {
+  const existing = getExpenseById(expenseId);
+  if (!existing || existing.deletedAt) {
+    throw new Error(`Expense not found: ${expenseId}`);
+  }
+  if (!canDeleteExpense(expenseId)) {
+    throw new Error('You do not have permission to delete this expense.');
+  }
+
+  logger.info('Delete expense started', {
+    table: 'expenses',
+    expenseId,
+    groupId: existing.groupId,
+    type: existing.type,
+  });
+
   try {
-    const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+    const { error } = await supabase
+      .from('expenses')
+      .update({ deleted_at: isoNow() })
+      .eq('id', expenseId);
     if (error) {
       throw error;
     }
-    logger.info('Delete expense succeeded', { table: 'expenses', expenseId });
+    logger.info('Delete expense succeeded', {
+      table: 'expenses',
+      expenseId,
+      groupId: existing.groupId,
+      type: existing.type,
+    });
+    return {
+      expenseId,
+      groupId: existing.groupId ?? null,
+      type: existing.type,
+    };
   } catch (error) {
-    logger.error('Delete expense failed', error, { table: 'expenses', expenseId });
+    logger.error('Delete expense failed', error, {
+      table: 'expenses',
+      expenseId,
+      groupId: existing.groupId,
+      type: existing.type,
+    });
     throw error;
   }
+}
+
+export function canDeleteExpense(expenseId: string, userId: string = getCurrentUserId()): boolean {
+  const expense = getExpenseById(expenseId);
+  if (!expense || expense.deletedAt) {
+    return false;
+  }
+  if (expense.userId === userId) {
+    return true;
+  }
+  if (expense.type === 'split' && expense.groupId) {
+    const group = getGroupById(expense.groupId);
+    return group?.ownerId === userId;
+  }
+  return false;
 }

@@ -6,5 +6,6 @@ export { CustomSplitCard } from './CustomSplitCard';
 export { SplitPreviewCard, type SplitPreviewRow } from './SplitPreviewCard';
 export { ReceiptPicker } from './ReceiptPicker';
 export { ReceiptPreviewCard } from './ReceiptPreviewCard';
+export { DeleteExpenseModal } from './DeleteExpenseModal';
 export { ReceiptViewerModal } from './ReceiptViewerModal';
 export { SplitExpenseCard, formatSplitExpenseSettlementLabel, type SplitExpenseCardVariant } from './SplitExpenseCard';

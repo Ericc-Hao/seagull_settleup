@@ -111,6 +111,7 @@ describe('mutationInvalidation', () => {
     expect(calls).toEqual([
       { type: 'expenses' },
       { type: 'home' },
+      { type: 'receipts' },
     ]);
   });
 
@@ -127,6 +128,7 @@ describe('mutationInvalidation', () => {
       { type: 'group_detail', payload: { groupId: 'group-del' } },
       { type: 'settlements', payload: { groupId: 'group-del' } },
       { type: 'home' },
+      { type: 'receipts' },
     ]);
   });
 

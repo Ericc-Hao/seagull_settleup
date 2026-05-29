@@ -27,7 +27,7 @@ import { useGroups } from '../hooks/useGroups';
 import { useInviteMembers } from '../hooks/useInviteMembers';
 import { colors, layout, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
-import { safeBack } from '../utils/navigation';
+import { safeBack, navigateAfterScanReceiptSave } from '../utils/navigation';
 
 const logger = createLogger('AddExpenseScreen');
 
@@ -62,9 +62,23 @@ export function AddExpenseScreen({ initialGroupId, prefill }: AddExpenseScreenPr
 
   const handleSave = async () => {
     const ok = await form.save();
-    if (ok) {
-      safeBack('/(tabs)/expenses');
+    if (!ok) {
+      return;
     }
+
+    if (prefill?.source === 'scan_receipt') {
+      if (form.kind === 'split' && form.selectedGroupId) {
+        navigateAfterScanReceiptSave('/(tabs)/groups', {
+          expenseType: form.kind,
+          groupId: form.selectedGroupId,
+        });
+      } else {
+        navigateAfterScanReceiptSave('/(tabs)/expenses', { expenseType: form.kind });
+      }
+      return;
+    }
+
+    safeBack('/(tabs)/expenses');
   };
 
   const handleInviteSubmit = async () => {
@@ -132,16 +146,21 @@ export function AddExpenseScreen({ initialGroupId, prefill }: AddExpenseScreenPr
 
           {showSplitFields ? (
             <FormSection label="Paid by">
-              {form.membersLoading ? (
+          {form.membersLoading && form.members.length === 0 ? (
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>Loading members…</Text>
               ) : (
-                <PaidBySelector
-                  members={form.payerMembers}
-                  selectedMemberId={form.payerMemberId}
-                  onSelect={form.setPayerMemberId}
-                  showInvite={form.isOwner}
-                  onInvite={() => form.setShowInviteModal(true)}
-                />
+                <>
+                  <PaidBySelector
+                    members={form.payerMembers}
+                    selectedMemberId={form.payerMemberId}
+                    onSelect={form.setPayerMemberId}
+                    showInvite={form.isOwner}
+                    onInvite={() => form.setShowInviteModal(true)}
+                  />
+                  {form.membersRefreshing ? (
+                    <Text style={[typography.caption, { color: colors.textTertiary }]}>Refreshing members…</Text>
+                  ) : null}
+                </>
               )}
             </FormSection>
           ) : null}

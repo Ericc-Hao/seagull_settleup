@@ -8,11 +8,9 @@ import {
   getGroupById,
   setGroupInactive,
 } from '../services/groupService';
-import { filterDetailMembers, getGroupMembersWithProfiles } from '../services/memberService';
 import { getGroupExpenses, readDb } from '../services/dbHelpers';
 import { getRecentGroupExpensesForCurrentUser } from '../services/expenseService';
 import type { Group } from '../types/models';
-import type { GroupMemberWithProfile } from '../types/views';
 import { formatOptionalDateRange } from '../utils/date';
 import { formatCAD } from '../utils/money';
 import { toUserFriendlyError } from '../utils/errors';
@@ -21,14 +19,13 @@ import {
   invalidateAfterDeleteGroup,
   invalidateAfterSetGroupInactive,
 } from '../utils/mutationInvalidation';
+import { useGroupParticipants } from './useGroupParticipants';
 
 const logger = createLogger('useGroupDetail');
 
 export function useGroupDetail(groupId: string) {
   const { versions, ready, getGroupDetailVersion, invalidate } = useAppData();
   const groupDetailVersion = getGroupDetailVersion(groupId);
-  const [members, setMembers] = useState<GroupMemberWithProfile[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(true);
   const [loadingGroup, setLoadingGroup] = useState(true);
   const [remoteGroup, setRemoteGroup] = useState<Group | undefined>();
   const [loadError, setLoadError] = useState<string | undefined>();
@@ -40,6 +37,12 @@ export function useGroupDetail(groupId: string) {
     [groupId, versions.groups, groupDetailVersion],
   );
   const group = cachedGroup ?? remoteGroup;
+  const {
+    members,
+    loading: loadingMembers,
+    refreshing: membersRefreshing,
+    refresh: refreshMembers,
+  } = useGroupParticipants(group ? groupId : undefined, 'detail');
 
   useEffect(() => {
     if (cachedGroup) {
@@ -48,49 +51,39 @@ export function useGroupDetail(groupId: string) {
       setLoadError(undefined);
       return;
     }
-    if (!ready) {
-      return;
-    }
 
-    let cancelled = false;
+    let mounted = true;
     setLoadingGroup(true);
-    setLoadError(undefined);
     logger.info('Loading group detail', { groupId });
-
     void fetchGroupById(groupId)
-      .then((loaded) => {
-        if (cancelled) {
+      .then((next) => {
+        if (!mounted) {
           return;
         }
-        if (loaded) {
-          setRemoteGroup(loaded);
-          logger.info('Group detail loaded', { groupId });
-        } else {
-          setRemoteGroup(undefined);
-          logger.warn('Group detail not found', { groupId });
-        }
+        setRemoteGroup(next ?? undefined);
+        setLoadError(next ? undefined : 'Group not found.');
       })
       .catch((error) => {
-        if (cancelled) {
+        if (!mounted) {
           return;
         }
-        logger.error('Group detail load failed', error, { groupId });
-        setLoadError(toUserFriendlyError(error, 'Unable to load this group.'));
+        logger.error('Loading group detail failed', error, { groupId });
+        setLoadError(toUserFriendlyError(error, 'Unable to load group.'));
       })
       .finally(() => {
-        if (!cancelled) {
+        if (mounted) {
           setLoadingGroup(false);
         }
       });
 
     return () => {
-      cancelled = true;
+      mounted = false;
     };
-  }, [cachedGroup, groupId, ready]);
+  }, [cachedGroup, groupId, groupDetailVersion]);
 
   const userId = getCurrentUserId();
   const isOwner = group?.ownerId === userId;
-  const currentUserRole = isOwner ? 'owner' : members.some((m) => m.userId === userId) ? 'member' : undefined;
+  const currentUserRole = isOwner ? 'owner' : 'member';
 
   const totalSpentCents = useMemo(() => {
     if (!group) {
@@ -103,28 +96,6 @@ export function useGroupDetail(groupId: string) {
     () => (group ? getRecentGroupExpensesForCurrentUser(groupId, 5) : []),
     [group, groupId, versions.expenses, groupDetailVersion],
   );
-
-  const loadMembers = useCallback(async () => {
-    if (!group) {
-      setMembers([]);
-      setLoadingMembers(false);
-      return;
-    }
-    setLoadingMembers(true);
-    try {
-      const rows = await getGroupMembersWithProfiles(groupId);
-      setMembers(filterDetailMembers(rows));
-    } catch (error) {
-      logger.error('Load group members failed', error, { groupId });
-      setActionError(toUserFriendlyError(error, 'Unable to load group members.'));
-    } finally {
-      setLoadingMembers(false);
-    }
-  }, [group, groupId]);
-
-  useEffect(() => {
-    void loadMembers();
-  }, [loadMembers, versions.groups, groupDetailVersion]);
 
   const setInactive = useCallback(async () => {
     setActionLoading(true);
@@ -166,6 +137,7 @@ export function useGroupDetail(groupId: string) {
     loadError,
     members,
     loadingMembers,
+    membersRefreshing,
     isOwner,
     currentUserRole,
     currentUserId: userId,
@@ -177,6 +149,6 @@ export function useGroupDetail(groupId: string) {
     removeGroup,
     actionError,
     actionLoading,
-    refreshMembers: loadMembers,
+    refreshMembers,
   };
 }

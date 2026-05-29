@@ -1,9 +1,14 @@
 import { getGroupMembersByGroup } from '../services/memberService';
-import { useSupabaseQuery } from './useSupabaseQuery';
+import { useGroupParticipants } from './useGroupParticipants';
 
 export function useGroupMembers(groupId: string) {
-  return useSupabaseQuery(async () => getGroupMembersByGroup(groupId), [groupId], {
-    namespace: 'useGroupMembers',
-    operation: 'fetchGroupMembers',
-  });
+  const query = useGroupParticipants(groupId, 'all');
+  return {
+    data: query.members,
+    loading: query.loading && query.members.length === 0,
+    error: null,
+    refetch: query.refresh,
+  };
 }
+
+export { getGroupMembersByGroup };

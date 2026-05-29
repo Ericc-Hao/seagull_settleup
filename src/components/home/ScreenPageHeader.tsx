@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { colors, layout, typography } from '../../theme';
@@ -9,11 +10,13 @@ export function ScreenPageHeader({
   subtitle,
   onBack,
   showMascot = false,
+  rightAction,
 }: {
   title: string;
   subtitle?: string;
   onBack: () => void;
   showMascot?: boolean;
+  rightAction?: ReactNode;
 }) {
   return (
     <View
@@ -47,7 +50,7 @@ export function ScreenPageHeader({
           ) : null}
         </View>
 
-        {showMascot ? <SeagullMascot size={52} /> : <View style={{ width: 52 }} />}
+        {showMascot ? <SeagullMascot size={52} /> : rightAction ?? <View style={{ width: 52 }} />}
       </View>
     </View>
   );

@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setCachedUserId } from '../../lib/auth';
 import { setCache } from '../../lib/dataCache';
 import type { DatabaseSnapshot } from '../../storage/types';
-import { getCurrentUserMonthlyExpenseSummary, getExpensesSummary, getRecentGroupExpensesForCurrentUser } from '../expenseService';
+import { getGroupExpenses } from '../dbHelpers';
+import {
+  canDeleteExpense,
+  getCurrentUserMonthlyExpenseSummary,
+  getExpensesSummary,
+  getRecentGroupExpensesForCurrentUser,
+} from '../expenseService';
 
 function createExpenseFixture(): DatabaseSnapshot {
   const now = new Date().toISOString();
@@ -219,5 +225,44 @@ describe('getRecentGroupExpensesForCurrentUser', () => {
     expect(expenses[0].myShareAmountCents).toBe(0);
     expect(expenses[0].includedInSplit).toBe(false);
     expect(expenses[0].settlementStatus).toBe('settled');
+  });
+
+  it('excludes soft-deleted group expenses from group expense queries', () => {
+    const fixture = createExpenseFixture();
+    setCache({
+      ...fixture,
+      expenses: [
+        ...fixture.expenses,
+        {
+          ...fixture.expenses[1],
+          id: 'expense-deleted',
+          deletedAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const groupExpenses = getGroupExpenses('group-303');
+    expect(groupExpenses.map((expense) => expense.id)).toEqual(['expense-split']);
+  });
+
+  it('allows expense creator and group owner to delete split expenses', () => {
+    setCache(createExpenseFixture());
+    setCachedUserId('user-chen');
+    expect(canDeleteExpense('expense-split')).toBe(true);
+
+    setCachedUserId('user-eric');
+    expect(canDeleteExpense('expense-split')).toBe(true);
+
+    setCachedUserId('user-third');
+    expect(canDeleteExpense('expense-split')).toBe(false);
+  });
+
+  it('allows only creator to delete personal expenses', () => {
+    setCache(createExpenseFixture());
+    setCachedUserId('user-eric');
+    expect(canDeleteExpense('expense-personal')).toBe(true);
+
+    setCachedUserId('user-chen');
+    expect(canDeleteExpense('expense-personal')).toBe(false);
   });
 });

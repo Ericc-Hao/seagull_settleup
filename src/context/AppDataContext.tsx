@@ -32,6 +32,7 @@ import {
   refreshAllCache,
   refreshCacheSlice,
 } from '../lib/cacheRefresh';
+import { invalidateGroupParticipantCache } from '../lib/groupParticipantCache';
 import { syncPendingInvitationsForCurrentUser } from '../services/invitationService';
 import { ensureProfileExists } from '../services/profileService';
 import type { PendingInvitationView } from '../types/views';
@@ -275,6 +276,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const applicableInvalidations = filterInvalidationsWithSuccessfulSlices(batch, successfulSlices);
       if (applicableInvalidations.length > 0) {
         applyVersionAndTimestampBumps(applicableInvalidations);
+        for (const item of applicableInvalidations) {
+          if (
+            item.type === 'all' ||
+            item.type === 'profile' ||
+            item.type === 'group_members' ||
+            item.type === 'group_detail' ||
+            item.type === 'invitations'
+          ) {
+            invalidateGroupParticipantCache(item.payload?.groupId);
+          }
+        }
       }
 
       if (needsInvitations) {
@@ -309,6 +321,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const resetAppData = useCallback(() => {
     invalidationQueue.current = [];
+    invalidateGroupParticipantCache();
     setCache(createEmptySnapshot());
     setVersions(EMPTY_VERSIONS);
     setPendingInvitations([]);

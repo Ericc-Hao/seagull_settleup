@@ -1,13 +1,14 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { PrimaryButton, ScreenLayout, ScreenPageHeader } from '../components';
 import { ManageMembersList, MemberActionSheet } from '../components/groups';
 import { useAppData } from '../context/AppDataContext';
 import { useGroupMemberActions } from '../hooks/useGroupMemberActions';
+import { useGroupParticipants } from '../hooks/useGroupParticipants';
 import { getCurrentUserId, getGroupById } from '../services/groupService';
-import { getGroupMembersWithProfiles, partitionMembers } from '../services/memberService';
+import { partitionMembers } from '../services/memberService';
 import type { GroupMemberWithProfile } from '../types/views';
 import { colors, layout, spacing, typography } from '../theme';
 import { safeBack } from '../utils/navigation';
@@ -19,30 +20,15 @@ interface ManageMembersScreenProps {
 export function ManageMembersScreen({ groupId }: ManageMembersScreenProps) {
   const { versions, getGroupDetailVersion } = useAppData();
   const groupDetailVersion = getGroupDetailVersion(groupId);
-  const [members, setMembers] = useState<GroupMemberWithProfile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedMember, setSelectedMember] = useState<GroupMemberWithProfile | null>(null);
+  const { members, loading, refreshing, refresh } = useGroupParticipants(groupId, 'all');
 
   const group = useMemo(() => getGroupById(groupId), [groupId, versions.groups, groupDetailVersion]);
   const userId = getCurrentUserId();
   const isOwner = group?.ownerId === userId;
   const currentUserRole = isOwner ? 'owner' : 'member';
 
-  const loadMembers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const rows = await getGroupMembersWithProfiles(groupId);
-      setMembers(rows);
-    } finally {
-      setLoading(false);
-    }
-  }, [groupId]);
-
-  useEffect(() => {
-    void loadMembers();
-  }, [loadMembers, versions.groups, groupDetailVersion]);
-
-  const memberActions = useGroupMemberActions(groupId, loadMembers);
+  const memberActions = useGroupMemberActions(groupId, refresh);
 
   const { active, pending, inactive } = useMemo(() => partitionMembers(members), [members]);
 
@@ -76,15 +62,22 @@ export function ManageMembersScreen({ groupId }: ManageMembersScreenProps) {
         ) : undefined
       }
     >
-      {loading ? (
+      {loading && members.length === 0 ? (
         <Text style={typography.caption}>Loading members...</Text>
       ) : (
-        <ManageMembersList
-          activeMembers={active}
-          pendingMembers={pending}
-          inactiveMembers={inactive}
-          onPressMember={setSelectedMember}
-        />
+        <>
+          <ManageMembersList
+            activeMembers={active}
+            pendingMembers={pending}
+            inactiveMembers={inactive}
+            onPressMember={setSelectedMember}
+          />
+          {refreshing ? (
+            <Text style={[typography.caption, { color: colors.textTertiary, marginTop: spacing.sm }]}>
+              Refreshing members…
+            </Text>
+          ) : null}
+        </>
       )}
 
       <MemberActionSheet

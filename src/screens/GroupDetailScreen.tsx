@@ -108,22 +108,29 @@ export function GroupDetailScreen({ groupId }: GroupDetailScreenProps) {
     >
       <View style={{ gap: spacing.lg }}>
         <FormSection label="Members">
-          {detail.loadingMembers ? (
+          {detail.loadingMembers && detail.members.length === 0 ? (
             <Text style={typography.caption}>Loading members...</Text>
           ) : (
-            <GroupMemberAvatarList
-              members={detail.members}
-              onPressMember={openMemberSheet}
-              onPressInvite={
-                detail.isOwner
-                  ? () => {
-                      setShowSettings(false);
-                      setShowInviteModal(true);
-                    }
-                  : undefined
-              }
-              showInviteButton={detail.isOwner}
-            />
+            <>
+              <GroupMemberAvatarList
+                members={detail.members}
+                onPressMember={openMemberSheet}
+                onPressInvite={
+                  detail.isOwner
+                    ? () => {
+                        setShowSettings(false);
+                        setShowInviteModal(true);
+                      }
+                    : undefined
+                }
+                showInviteButton={detail.isOwner}
+              />
+              {detail.membersRefreshing ? (
+                <Text style={[typography.caption, { color: colors.textTertiary, marginTop: spacing.xs }]}>
+                  Refreshing members…
+                </Text>
+              ) : null}
+            </>
           )}
         </FormSection>
 

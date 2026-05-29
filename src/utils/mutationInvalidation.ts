@@ -59,10 +59,12 @@ export function invalidateAfterDeleteExpense(invalidate: InvalidateFn, input: Ex
     invalidate('group_detail', { groupId: input.groupId });
     invalidate('settlements', { groupId: input.groupId });
     invalidate('home');
+    invalidate('receipts');
     return;
   }
   invalidate('expenses');
   invalidate('home');
+  invalidate('receipts');
 }
 
 export function invalidateAfterInviteMember(invalidate: InvalidateFn, groupId: string): void {

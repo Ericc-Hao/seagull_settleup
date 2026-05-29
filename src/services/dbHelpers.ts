@@ -27,7 +27,9 @@ export function getMemberTeamId(memberId: string, groupId: string, db = readDb()
 }
 
 export function getGroupExpenses(groupId: string, db = readDb()): Expense[] {
-  return db.expenses.filter((expense) => expense.groupId === groupId && expense.type === 'split');
+  return db.expenses.filter(
+    (expense) => expense.groupId === groupId && expense.type === 'split' && !expense.deletedAt,
+  );
 }
 
 export function getExpenseSplits(expenseId: string, db = readDb()): ExpenseSplit[] {

@@ -288,3 +288,76 @@ Invitation emails use:
 `https://split.seagullcoffee.ca/register?invite={token}`
 
 Email clients cannot load local `assets/icon.png`. The web app uses the local asset; emails use the public `EMAIL_ICON_URL` from Supabase Storage.
+
+## Receipt scanning (OCR)
+
+Receipt OCR runs in a Supabase Edge Function. **Do not** put `OPENAI_API_KEY` or any OCR provider key in Expo `.env` or frontend code. The mobile/web app only calls:
+
+```typescript
+supabase.functions.invoke('scan-receipt', { body: { imageBase64, mimeType } })
+```
+
+### Deploy the Edge Function
+
+```bash
+npx supabase functions deploy scan-receipt
+```
+
+### Set the OCR secret (Edge Function env only)
+
+```bash
+npx supabase secrets set OPENAI_API_KEY=your_key_here
+```
+
+Optional:
+
+```bash
+npx supabase secrets set RECEIPT_OCR_PROVIDER=openai
+npx supabase secrets set OPENAI_VISION_MODEL=gpt-4o-mini
+```
+
+If `OPENAI_API_KEY` is missing, the function returns:
+
+`Receipt scanning is not configured yet.`
+
+### Debugging OCR failures
+
+After deploying, scan a receipt and check Supabase Edge Function logs. Expected success path:
+
+```json
+{"event":"scan_receipt_started","mimeType":"image/png","imageBytes":348508}
+{"event":"openai_ocr_request_started","model":"gpt-4o-mini","mimeType":"image/png","imageBytes":348508,"hasApiKey":true}
+{"event":"openai_ocr_response_received","status":200,"ok":true}
+{"event":"openai_ocr_content_received","contentPreview":"..."}
+{"event":"scan_receipt_succeeded","hasAmount":true}
+```
+
+If OpenAI fails, logs include `openai_ocr_response_error` with `status` and `bodyPreview` (first 500 chars). Common statuses:
+
+| Status | Likely cause |
+|--------|----------------|
+| 401 | Invalid OpenAI key or wrong secret value |
+| 403 | Key/project lacks access |
+| 404 | Wrong endpoint or model name |
+| 429 | Quota, rate limit, or billing issue |
+| 400 | Bad payload or invalid image data |
+| 500/502/503 | OpenAI temporary outage |
+
+Structured error codes returned to the app: `OCR_NOT_CONFIGURED`, `OPENAI_REQUEST_FAILED`, `OPENAI_INVALID_RESPONSE`, `NO_AMOUNT_DETECTED`, `INVALID_IMAGE`, `REQUEST_BODY_INVALID`.
+
+### Security notes
+
+- Never add `OPENAI_API_KEY` to `EXPO_PUBLIC_*` variables.
+- Never add the Supabase **service role** key to the Expo app.
+- Receipt images and OCR API keys are not logged by the app logger.
+
+### Manual test checklist (iOS)
+
+1. Home → **Scan Receipt**
+2. **Take Photo** and **Upload Image**
+3. OCR loading state appears
+4. Detected amount can be edited
+5. Continue as **Personal** or **Split** opens Add Expense with amount + receipt prefilled
+6. Save expense — receipt appears on Expense Detail
+7. If OCR is not configured, user sees a clean inline message (no redbox)
+8. If no total is detected, user can enter amount manually and continue

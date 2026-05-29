@@ -31,6 +31,7 @@ export function HomeScreen() {
   });
 
   const onQuickAction = (id: string) => {
+    if (id === 'scan') router.push('/scan-receipt');
     if (id === 'create') router.push('/create-group');
     if (id === 'settle') router.push('/pending-transfers');
     if (id === 'personal') {

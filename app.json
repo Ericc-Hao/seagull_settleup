@@ -17,7 +17,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Seagull Split to choose an avatar from your photo library."
+          "photosPermission": "Allow Seagull Split to choose receipt images and profile photos from your photo library.",
+          "cameraPermission": "Allow Seagull Split to take receipt photos."
         }
       ],
       "@react-native-community/datetimepicker",
@@ -33,7 +34,11 @@
     "ios": {
       "supportsTablet": true,
       "icon": "./assets/icon.png",
-      "bundleIdentifier": "com.anonymous.seagull-split"
+      "bundleIdentifier": "com.anonymous.seagull-split",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow Seagull Split to take receipt photos.",
+        "NSPhotoLibraryUsageDescription": "Allow Seagull Split to choose receipt images and profile photos from your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {

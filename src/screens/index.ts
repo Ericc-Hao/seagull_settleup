@@ -6,5 +6,6 @@ export { InviteMembersScreen } from './InviteMembersScreen';
 export { ManageMembersScreen } from './ManageMembersScreen';
 export { EditGroupScreen } from './EditGroupScreen';
 export { AddExpenseScreen } from './AddExpenseScreen';
+export { ScanReceiptScreen } from './ScanReceiptScreen';
 export { SettleUpScreen } from './SettleUpScreen';
 export { EditProfileScreen } from './EditProfileScreen';

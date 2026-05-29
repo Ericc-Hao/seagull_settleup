@@ -84,6 +84,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="create-group" options={modalStackScreenOptions} />
+        <Stack.Screen name="scan-receipt" options={modalStackScreenOptions} />
         <Stack.Screen name="add-expense" options={modalStackScreenOptions} />
         <Stack.Screen name="expense" />
         <Stack.Screen name="edit-profile" options={modalStackScreenOptions} />

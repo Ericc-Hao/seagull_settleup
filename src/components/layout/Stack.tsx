@@ -11,14 +11,10 @@ type StackProps = {
 
 type StyledChild = ReactElement<{ style?: StyleProp<ViewStyle> }>;
 
-function flattenStackChildren(children: ReactNode): ReactNode[] {
+export function flattenStackChildren(children: ReactNode): ReactNode[] {
   const items: ReactNode[] = [];
 
-  Children.forEach(children, (child) => {
-    if (child == null || child === false) {
-      return;
-    }
-
+  Children.toArray(children).forEach((child) => {
     if (isValidElement<{ children?: ReactNode }>(child) && child.type === Fragment) {
       items.push(...flattenStackChildren(child.props.children));
       return;
@@ -27,19 +23,29 @@ function flattenStackChildren(children: ReactNode): ReactNode[] {
     items.push(child);
   });
 
-  return items;
+  return Children.toArray(items);
 }
 
-function stackChildren(children: ReactNode, gap: number, axis: 'vertical' | 'horizontal'): ReactNode[] {
+export function buildStackChildren(
+  children: ReactNode,
+  gap: number,
+  axis: 'vertical' | 'horizontal',
+): ReactNode[] {
   const items = flattenStackChildren(children);
 
   return items.map((child, index) => {
-    if (!isValidElement(child) || index === 0 || gap <= 0) {
+    const stackKey = isValidElement(child) && child.key != null ? String(child.key) : `stack-item-${index}`;
+
+    if (!isValidElement(child)) {
       return child;
     }
 
+    if (index === 0 || gap <= 0) {
+      return child.key != null ? child : cloneElement(child, { key: stackKey });
+    }
+
     if (child.type === Fragment) {
-      return child;
+      return cloneElement(child, { key: stackKey });
     }
 
     const spacingStyle =
@@ -47,6 +53,7 @@ function stackChildren(children: ReactNode, gap: number, axis: 'vertical' | 'hor
 
     const styledChild = child as StyledChild;
     return cloneElement(styledChild, {
+      key: stackKey,
       style: [styledChild.props.style, spacingStyle],
     });
   });
@@ -55,7 +62,7 @@ function stackChildren(children: ReactNode, gap: number, axis: 'vertical' | 'hor
 export function VStack({ children, gap = 0, style, align, justify }: StackProps) {
   return (
     <View style={[{ flexDirection: 'column', alignItems: align, justifyContent: justify }, style]}>
-      {stackChildren(children, gap, 'vertical')}
+      {buildStackChildren(children, gap, 'vertical')}
     </View>
   );
 }
@@ -63,7 +70,7 @@ export function VStack({ children, gap = 0, style, align, justify }: StackProps)
 export function HStack({ children, gap = 0, style, align, justify }: StackProps) {
   return (
     <View style={[{ flexDirection: 'row', alignItems: align ?? 'center', justifyContent: justify }, style]}>
-      {stackChildren(children, gap, 'horizontal')}
+      {buildStackChildren(children, gap, 'horizontal')}
     </View>
   );
 }

@@ -150,7 +150,7 @@ export function HomeScreen() {
         <SectionTitle title="Split Groups" actionLabel="View All" onAction={() => router.push('/(tabs)/groups')} />
         <View style={{ marginTop: layout.cardGap }}>
           {data.splitGroups.length > 0 ? (
-            <View style={{ flexDirection: 'row', width: '100%' }}>
+            <View style={{ flexDirection: 'row', width: '100%', alignItems: 'stretch' }}>
               {data.splitGroups.map((group, index) => (
                 <View
                   key={group.id}

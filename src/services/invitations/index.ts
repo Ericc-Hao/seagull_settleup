@@ -1,13 +1,9 @@
-/**
- * Compatibility facade — re-exports the invitation module public API.
- * Prefer importing from './invitations' for new code.
- */
 export type {
   AcceptInvitationResult,
   InvitationDetailFallback,
   InvitationEmailResult,
   InviteMembersResult,
-} from './invitations';
+} from './invitationTypes';
 
 export {
   acceptInvitation,
@@ -15,10 +11,8 @@ export {
   createGroupInvitation,
   createGroupInvitations,
   declineInvitation,
-  formatInvitationMessage,
   getInvitationByGroupMemberId,
   getInvitationDetail,
-  getInvitationPreviewByToken,
   getInvitationViewById,
   getPendingInvitationByToken,
   getPendingInvitationsForCurrentUser,
@@ -26,7 +20,11 @@ export {
   invitationFallbackFromNotification,
   inviteMoreMembers,
   resendInvitation,
-  sendGroupInvitationEmail,
-  sendInvitationEmail,
   syncPendingInvitationsForCurrentUser,
-} from './invitations';
+} from './invitationLifecycleService';
+
+export { sendGroupInvitationEmail, sendInvitationEmail } from './invitationEmailService';
+
+export { getInvitationPreviewByToken } from './invitationPreviewService';
+
+export { formatInvitationMessage } from '../../utils/invitationCopy';

@@ -22,7 +22,19 @@ import { useInvitationPreview } from '../hooks/useInvitationPreview';
 import { useInviteRouteParam } from '../hooks/useInviteRouteParam';
 import { setPendingInviteToken } from '../lib/pendingInviteToken';
 import { supabase } from '../lib/supabase';
-import { recoverPassword, exchangeRecoveryCodeFromUrl } from '../services/authService';
+import {
+  recoverPassword,
+  clearRecoveryParamsFromBrowserUrl,
+  exchangeRecoveryCodeFromUrl,
+  hasRecoveryCodeInUrl,
+  isExpiredRecoveryError,
+  isRecoveryLinkExpiredError,
+  parseRecoveryLinkErrorFromUrl,
+  parseRecoveryTokenHashFromUrl,
+  RECOVERY_LINK_EXPIRED_MESSAGE,
+  signOutLocal,
+  verifyRecoveryTokenHash,
+} from '../services/authService';
 import { colors, layout, radii, spacing, typography } from '../theme';
 import { createLogger } from '../utils/logger';
 import { toUserFriendlyAuthError } from '../utils/authErrors';
@@ -669,9 +681,10 @@ export function ForgotPasswordScreen() {
     setSubmitting(true);
     authUiLogger.info('Password recovery submit started', { email: maskEmail(trimmed) });
     try {
-      // recoverPassword never reveals whether the email exists.
       await recoverPassword(trimmed);
       setSent(true);
+    } catch {
+      setValidation('Could not send password reset email right now. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -681,7 +694,7 @@ export function ForgotPasswordScreen() {
     return (
       <AuthCard title="Check Your Inbox" subtitle="Password recovery is on its way." compact>
         <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
-          Password recovery email sent. Please check your inbox.
+          If this email is registered, we&apos;ll send a password reset link.
         </Text>
         <SecondaryButton label="Back to Log In" variant="filled" onPress={() => safeBack('/(auth)/login')} />
       </AuthCard>
@@ -711,7 +724,7 @@ export function ForgotPasswordScreen() {
 }
 
 export function ResetPasswordScreen() {
-  const { refreshSession, authInitialized, session } = useAuth();
+  const { authInitialized, session } = useAuth();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
@@ -719,9 +732,10 @@ export function ResetPasswordScreen() {
   const [done, setDone] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [hasRecoverySession, setHasRecoverySession] = useState(false);
+  const [expiredLinkMessage, setExpiredLinkMessage] = useState<string | null>(null);
+  const [pendingTokenHash, setPendingTokenHash] = useState<string | null>(null);
+  const [continuing, setContinuing] = useState(false);
 
-  // Web: exchange the PKCE recovery code from the email link, then verify a
-  // session exists before showing the password form.
   useEffect(() => {
     if (!authInitialized) {
       return;
@@ -730,7 +744,23 @@ export function ResetPasswordScreen() {
     void (async () => {
       try {
         if (Platform.OS === 'web') {
-          await exchangeRecoveryCodeFromUrl();
+          const linkError = parseRecoveryLinkErrorFromUrl();
+          if (isRecoveryLinkExpiredError(linkError)) {
+            setExpiredLinkMessage(RECOVERY_LINK_EXPIRED_MESSAGE);
+            setHasRecoverySession(false);
+            return;
+          }
+
+          const tokenHash = parseRecoveryTokenHashFromUrl();
+          if (tokenHash) {
+            setPendingTokenHash(tokenHash);
+            setHasRecoverySession(false);
+            return;
+          }
+
+          if (hasRecoveryCodeInUrl()) {
+            await exchangeRecoveryCodeFromUrl();
+          }
         }
         const { data, error } = await supabase.auth.getSession();
         if (error) {
@@ -745,12 +775,41 @@ export function ResetPasswordScreen() {
         authUiLogger.warn('Reset password recovery link invalid', {
           reason: toUserFriendlyAuthError(error),
         });
+        if (isExpiredRecoveryError(error)) {
+          setExpiredLinkMessage(RECOVERY_LINK_EXPIRED_MESSAGE);
+        }
         setHasRecoverySession(false);
       } finally {
         setSessionChecked(true);
       }
     })();
   }, [authInitialized]);
+
+  const handleContinueRecovery = async () => {
+    if (!pendingTokenHash) {
+      return;
+    }
+
+    setContinuing(true);
+    setValidation(null);
+    authUiLogger.info('Recovery token continue pressed');
+    try {
+      await verifyRecoveryTokenHash(pendingTokenHash);
+      clearRecoveryParamsFromBrowserUrl();
+      setPendingTokenHash(null);
+      setHasRecoverySession(true);
+    } catch (error) {
+      if (isExpiredRecoveryError(error)) {
+        setExpiredLinkMessage(RECOVERY_LINK_EXPIRED_MESSAGE);
+        setPendingTokenHash(null);
+      } else {
+        setValidation(toUserFriendlyAuthError(error));
+      }
+      setHasRecoverySession(false);
+    } finally {
+      setContinuing(false);
+    }
+  };
 
   const submit = async () => {
     setValidation(null);
@@ -770,7 +829,7 @@ export function ResetPasswordScreen() {
         setValidation(screenAuthError(error));
         return;
       }
-      await refreshSession();
+      await signOutLocal();
       setDone(true);
     } catch (error) {
       setValidation(screenAuthError(error));
@@ -794,6 +853,38 @@ export function ResetPasswordScreen() {
     );
   }
 
+  if (!hasRecoverySession && !session && expiredLinkMessage) {
+    return (
+      <AuthCard title="Link Expired" subtitle="This recovery link is no longer valid." compact>
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
+          {expiredLinkMessage}
+        </Text>
+        <PrimaryButton
+          label="Request New Reset Email"
+          onPress={() => router.replace('/(auth)/forgot-password')}
+        />
+        <SecondaryButton label="Back to Log In" variant="outline" onPress={() => router.replace('/(auth)/login')} />
+      </AuthCard>
+    );
+  }
+
+  if (pendingTokenHash && !hasRecoverySession) {
+    return (
+      <AuthCard title="Reset Password" subtitle="Ready to reset your password?" compact>
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center', lineHeight: 22 }]}>
+          We received your password reset request. Tap Continue to verify this link and choose a new password.
+        </Text>
+        <ErrorText message={validation} />
+        <PrimaryButton
+          label={continuing ? 'Verifying...' : 'Continue'}
+          onPress={() => void handleContinueRecovery()}
+          disabled={continuing}
+        />
+        <SecondaryButton label="Back to Log In" variant="outline" onPress={() => router.replace('/(auth)/login')} />
+      </AuthCard>
+    );
+  }
+
   if (!hasRecoverySession && !session) {
     return (
       <AuthCard title="Link Expired" subtitle="This recovery link is no longer valid." compact>
@@ -801,7 +892,7 @@ export function ResetPasswordScreen() {
           Open the reset link from your email, or request a new recovery email.
         </Text>
         <PrimaryButton
-          label="Request New Link"
+          label="Request New Reset Email"
           onPress={() => router.replace('/(auth)/forgot-password')}
         />
         <SecondaryButton label="Back to Log In" variant="outline" onPress={() => router.replace('/(auth)/login')} />

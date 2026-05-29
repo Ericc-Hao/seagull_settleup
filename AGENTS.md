@@ -444,7 +444,52 @@ For email logo:
 Use `EMAIL_ICON_URL` from Supabase Function env.
 Do not use local `assets/icon.png` in email HTML.
 
-## Logging rules
+## Password reset email rules
+
+Password reset emails use the `send-password-reset` Supabase Edge Function with Resend.
+Do not use Supabase default auth email for this flow.
+
+Required Edge Function secret:
+
+```bash
+supabase secrets set PASSWORD_RESET_REDIRECT_URL=https://split.seagullcoffee.ca/reset-password
+```
+
+Do not use `EXPO_PUBLIC_*` or localhost redirect URLs inside Edge Functions.
+
+Required Supabase Dashboard → Authentication → URL Configuration:
+
+- Site URL: `https://split.seagullcoffee.ca`
+- Redirect URLs:
+  - `https://split.seagullcoffee.ca/reset-password`
+  - `https://split.seagullcoffee.ca/auth/callback`
+  - `seagullsplit://auth/callback`
+
+Required Supabase Dashboard → Authentication → Providers → Email → **Email OTP Expiration**:
+
+- Set to **7200** seconds (~2 hours)
+- Password recovery link lifetime is controlled here, not in app code
+- Do not hardcode expiry in the frontend or try to extend tokens in app code
+
+Important:
+
+- Old links are not extended when this setting changes
+- Users must request a new reset email after the setting changes
+- A newer reset email may invalidate older links
+- `ResetPasswordScreen` shows: “This reset link is invalid or has expired. Please request a new password reset email.”
+
+Deploy:
+
+```bash
+npx supabase functions deploy send-password-reset --no-verify-jwt
+```
+
+After changing the function, redirect secret, or Email OTP Expiration, send a new reset email.
+Old links may return `otp_expired`.
+
+Custom reset emails use app URLs with `token_hash` and `type=recovery` (not direct
+Supabase `action_link`). `ResetPasswordScreen` verifies the token only after the user
+taps Continue, reducing early consumption by email scanners.
 
 Follow `.cursor/rules/logging.mdc`.
 

@@ -169,14 +169,26 @@ Go to **Authentication → URL Configuration → Redirect URLs** and add:
 
 Also set **Site URL** to `https://split.seagullcoffee.ca` for production web.
 
+Go to **Authentication → Providers → Email → Email OTP Expiration** and set:
+
+- **7200** seconds (~2 hours)
+
+This controls how long password recovery links remain valid. Do not hardcode expiry in the app or extend tokens in code — Supabase Auth owns link lifetime.
+
+Important:
+
+- Old links are not extended when this setting changes
+- Users must request a new reset email after changing the setting
+- Requesting a new reset email may invalidate older links
+
 Add `EXPO_PUBLIC_AUTH_REDIRECT_URL=https://split.seagullcoffee.ca` to your local `.env` (used for password recovery redirects).
 
 ### Forgot password flow
 
 1. User requests recovery from `/forgot-password`.
-2. Supabase sends an email with redirect `https://split.seagullcoffee.ca/reset-password`.
+2. The `send-password-reset` Edge Function sends a branded Resend email with redirect `https://split.seagullcoffee.ca/reset-password`.
 3. `/reset-password` exchanges the recovery code, verifies a session exists, then allows `updateUser({ password })`.
-4. If the link is missing or expired, the UI shows **Link Expired** with options to request a new link.
+4. If the link is missing or expired (`otp_expired`), the UI shows a clean message: “This reset link is invalid or has expired. Please request a new password reset email.” — no redirect to Home.
 
 ### Auth testing checklist
 

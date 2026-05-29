@@ -4,6 +4,9 @@
  * Add to Supabase Dashboard → Authentication → URL Configuration → Redirect URLs:
  *   - https://split.seagullcoffee.ca/reset-password
  *
+ * Link lifetime is controlled in Supabase Dashboard → Authentication → Providers →
+ * Email → Email OTP Expiration (recommended: 7200 seconds). Do not hardcode expiry here.
+ *
  * Set EXPO_PUBLIC_AUTH_REDIRECT_URL in .env (defaults to https://split.seagullcoffee.ca).
  */
 

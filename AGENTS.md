@@ -1,7 +1,400 @@
-# Expo HAS CHANGED
+# AGENTS.md
 
-Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing any code.
+## Expo version
 
-## Logging
+Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before writing any Expo-related code.
 
-Follow `.cursor/rules/logging.mdc`. Use `createLogger` from `src/utils/logger.ts` for all service, hook, and critical action logging. Never use raw `console.*` in application code.
+## Project rules
+
+This is an Expo React Native + TypeScript app with Web support.
+
+Primary targets:
+
+- iOS native
+- Android native
+- Expo Web
+- GitHub Pages web deployment
+
+Do not make web-only changes that break iOS.
+Do not make iOS-only changes that break web.
+
+Always run or recommend:
+
+- `npm run typecheck`
+- `npm test`
+- `npm run web:build`
+
+When changing iOS native config:
+
+- `app.json` changes such as scheme/icon/splash require a native rebuild
+- use `npx expo prebuild --clean` only when native config requires it
+- use `npx expo run:ios` to verify native behavior
+
+## Styling rules
+
+Keep the Seagull Split pastel design.
+
+Palette:
+
+- `#B1B2FF`
+- `#AAC4FF`
+- `#D2DAFF`
+- `#EEF1FF`
+
+Use existing theme tokens from `src/theme`.
+
+Do not redesign screens unless explicitly requested.
+
+For iOS layout:
+
+- avoid web-only CSS
+- avoid `position: fixed`
+- avoid CSS `boxShadow` strings
+- avoid `100vh`
+- avoid relying on web CSS
+- use React Native `View` / `Text` / `Image` / `Pressable`
+- use StyleSheet-compatible style objects
+- use `shadowColor` / `shadowOffset` / `shadowOpacity` / `shadowRadius` / `elevation`
+- use `minWidth: 0` and `numberOfLines` for compressed rows
+- do not rely on `gap` for fragile horizontal layouts
+
+For BottomTabBar:
+
+- maintain 5 evenly distributed slots: Home | Expenses | + | Groups | Profile
+- center plus button must have purple circular background
+- normal tab labels must be directly under icons
+- do not use random `zIndex` hacks
+- do not render plus icon without the purple circle
+
+## Supabase rules
+
+Supabase is the source of truth.
+
+Use:
+
+- `auth.users` for auth users
+- `public.profiles` for app-specific user data
+
+Do not create `public.users`.
+
+Never store passwords in `public.profiles`.
+
+Do not expose:
+
+- Supabase service role key
+- Resend API key
+- OpenAI API key
+- OCR provider keys
+
+Frontend may only use public Expo env vars:
+
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `EXPO_PUBLIC_AUTH_REDIRECT_URL`
+
+Use shared Supabase client from `src/lib/supabase.ts`.
+Do not create new Supabase clients inside components.
+
+## Auth rules
+
+Supported auth:
+
+- email/password
+- forgot password
+- Google OAuth
+
+Google OAuth:
+
+- web callback: `https://split.seagullcoffee.ca/auth/callback`
+- native callback: `seagullsplit://auth/callback`
+- app scheme: `seagullsplit`
+
+After Google login, call `ensureProfileExists()`.
+Create/update `public.profiles` from auth metadata:
+
+- `display_name` from `full_name` / `name`
+- `email` from `user.email`
+- `avatar_url` from `avatar_url` / `picture`
+- `default_currency = CAD`
+
+Auth errors:
+
+- Login errors must not appear on Register
+- Register errors must not appear on Login
+- use `localError` per auth screen
+- clear errors on screen focus/blur
+- failed login must stay on Login
+- wrong password should show: `Invalid email or password.`
+- do not redbox expected auth errors
+
+Recoverable session errors:
+
+- invalid refresh token
+- refresh token not found
+- JWT expired
+- JWT issued at future
+
+Treat these as expired session:
+
+- sign out locally
+- clear app cache
+- show login
+- do not redbox
+
+## Data refresh/cache rules
+
+Services should only read/write Supabase and return affected ids.
+
+Services must not call:
+
+- `refreshCache`
+- `setCache`
+- `cacheEvents`
+- `invalidate` directly
+
+Hooks/screens call `invalidate(...)` after successful mutations.
+
+`AppDataContext` owns:
+
+- cache
+- targeted refresh
+- loading flags
+- version counters
+- `mergeCache`
+
+Use targeted invalidation.
+Do not call `refreshAll` after normal mutations.
+
+After mutations:
+
+- create split expense -> invalidate `expenses`, `groups`, `group_detail`, `settlements`, `home`
+- mark transfer paid -> invalidate `settlements`, `groups`, `home`, `expenses`
+- accept invitation -> invalidate `groups`, `invitations`, `notifications`, `home`
+- update profile -> invalidate `profile`, `home`, `groups`
+
+## Group/invitation rules
+
+Pending invited members count as group participants.
+
+Pending invited members should be selectable in:
+
+- Paid By selector
+- Split Between selector
+- Split Preview
+- Expense Detail
+- Settlement calculations
+
+Pending invited members may not have `auth.users` or `profiles` yet.
+
+Use `group_members` as stable participant records.
+
+When inviting someone:
+
+- create `group_invitations` row
+- also create/upsert `group_members` row with `user_id=null`, `email`, `invitation_status='pending'`
+
+When accepted:
+
+- update same `group_members` row with `user_id` and `invitation_status='accepted'`
+- existing `expense_splits` remain valid
+
+When declined/cancelled:
+
+- mark `group_members` declined/cancelled/inactive
+- exclude from future selectors
+- keep historical expense display
+
+Pending badge rule:
+
+Only show Pending for true pending invited participants.
+Do not show Pending for:
+
+- group owner
+- active members
+- accepted members
+- users with accepted membership
+
+## Expense/split rules
+
+Use integer cents only.
+
+Do not use floating point amounts for calculations.
+
+Receipt upload should be associated with expenses through the existing receipt flow.
+
+Do not auto-create expenses from Scan Receipt.
+Scan Receipt should prefill Add Expense and let user confirm.
+
+## Scan Receipt rules
+
+Scan Receipt flow:
+
+Scan Receipt -> take/upload photo -> OCR detects amount -> user confirms/edits amount -> choose Personal or Split -> continue to Add Expense.
+
+OCR must run in Supabase Edge Function:
+
+`supabase/functions/scan-receipt`
+
+Do not call OpenAI/OCR providers directly from Expo frontend.
+
+Frontend sends:
+
+- `imageBase64`
+- `mimeType`
+
+Do not send only `file://` URI to Edge Function.
+
+Edge Function must read `OPENAI_API_KEY` from Supabase secrets only.
+
+Do not log:
+
+- `OPENAI_API_KEY`
+- image base64
+- full receipt image
+- full sensitive provider response
+
+Edge Function should return structured OCR errors:
+
+- `OCR_NOT_CONFIGURED`
+- `OPENAI_REQUEST_FAILED`
+- `OPENAI_INVALID_RESPONSE`
+- `OPENAI_RATE_LIMITED`
+- `OPENAI_UNAUTHORIZED`
+- `OPENAI_QUOTA_EXCEEDED`
+- `OPENAI_BAD_REQUEST`
+- `NO_AMOUNT_DETECTED`
+- `INVALID_IMAGE`
+- `REQUEST_BODY_INVALID`
+- `UNKNOWN_OCR_ERROR`
+
+Frontend must preserve `errorCode` and show safe messages.
+
+If OCR fails:
+
+- keep receipt preview
+- allow Replace Photo
+- allow Remove Photo
+- allow manual amount entry
+- allow Continue if amount is valid
+
+Deploy Edge Function:
+
+```bash
+supabase functions deploy scan-receipt
+```
+
+Set secret:
+
+```bash
+supabase secrets set OPENAI_API_KEY=...
+```
+
+## Email/invitation rules
+
+Invitation emails use Resend from Supabase Edge Function/server side only.
+
+Do not expose Resend API key in Expo.
+
+Invitation email should include:
+
+- inviter name/email
+- group name
+- clear register/login link
+- public logo URL
+
+For email logo:
+
+Use `EMAIL_ICON_URL` from Supabase Function env.
+Do not use local `assets/icon.png` in email HTML.
+
+## Logging rules
+
+Follow `.cursor/rules/logging.mdc`.
+
+Use `createLogger` from `src/utils/logger.ts` for all service, hook, and critical action logging.
+Do not use raw `console.log` in app code.
+
+Do not log:
+
+- passwords
+- auth tokens
+- refresh tokens
+- full sessions
+- service role key
+- OCR API key
+- image base64
+
+Expected errors should use `logger.warn` / `logger.info`, not `logger.error` if it causes redbox.
+
+Examples of expected errors:
+
+- invalid login credentials
+- OAuth cancelled
+- OCR no amount detected
+- invalid refresh token
+- missing scan receipt config
+
+## Deployment rules
+
+Web deployment:
+
+- GitHub Pages
+- custom domain: `split.seagullcoffee.ca`
+- workflow runs manually from `web` branch if configured that way
+- Node version: `24.3.0`
+
+Do not commit:
+
+- `.env`
+- `.env.local`
+- `node_modules`
+- `dist`
+- Supabase service role key
+- Resend API key
+- OpenAI API key
+
+Required env vars:
+
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `EXPO_PUBLIC_AUTH_REDIRECT_URL`
+
+## Testing checklist
+
+Before final response after code changes:
+
+- `npm run typecheck`
+- `npm test`
+- `npm run web:build`
+
+For iOS layout changes:
+
+- verify iOS simulator manually
+- check Home
+- check Groups
+- check Add Expense
+- check Profile
+- check Scan Receipt
+- check BottomTabBar
+
+For auth changes:
+
+- wrong password
+- register validation
+- forgot password
+- Google OAuth web
+- Google OAuth iOS
+- logout
+- stale session
+
+For Scan Receipt:
+
+- take photo
+- upload image
+- OCR success
+- OCR failure
+- manual amount entry
+- Replace Photo
+- Remove Photo
+- continue Personal
+- continue Split

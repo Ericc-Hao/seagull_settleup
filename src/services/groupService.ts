@@ -19,6 +19,12 @@ import {
   getGroupMembers,
   readDb,
 } from './dbHelpers';
+import {
+  fetchGroupsForCurrentUser,
+  getAccessibleGroupsForUser,
+  isActiveGroupStatus,
+} from './groupAccess';
+export { getAccessibleGroupsForUser } from './groupAccess';
 import { createGroupInvitation, sendInvitationEmail } from './invitationService';
 import { ensureProfileExists } from './profileService';
 import { getCurrentUserGroupBalanceSummary } from './settlementService';
@@ -373,10 +379,6 @@ export async function deleteGroup(groupId: string): Promise<void> {
   }
 }
 
-function isActiveGroupStatus(status: Group['status']): boolean {
-  return status === 'active' || status === 'planning' || status === 'ready_to_settle';
-}
-
 function getGroupOrThrow(groupId: string): Group {
   const group = getGroupById(groupId);
   if (!group) {
@@ -418,54 +420,31 @@ function mapGroupCard(
 
 export function buildGroupCards(userId: string = getCurrentUserId()): GroupCardView[] {
   const db = readDb();
-  return db.groups
-    .filter((group) => {
-      if (group.deletedAt || !isActiveGroupStatus(group.status)) {
-        return false;
-      }
-      if (group.ownerId === userId) {
-        return true;
-      }
-      const member = findMemberForUser(group.id, userId, db);
-      if (!member) {
-        return false;
-      }
-      return member.invitationStatus === 'active' && member.isActive !== false;
-    })
+  return getAccessibleGroupsForUser(userId, db)
+    .filter((group) => isActiveGroupStatus(group.status))
     .map((group, index) => mapGroupCard(group, index, userId, db));
 }
 
 export function buildInactiveGroupCards(userId: string = getCurrentUserId()): GroupCardView[] {
   const db = readDb();
-  return db.groups
-    .filter((group) => {
-      if (group.deletedAt || group.status !== 'inactive') {
-        return false;
-      }
-      if (group.ownerId === userId) {
-        return true;
-      }
-      const member = findMemberForUser(group.id, userId, db);
-      if (!member) {
-        return false;
-      }
-      return member.invitationStatus === 'active' && member.isActive !== false;
-    })
+  return getAccessibleGroupsForUser(userId, db)
+    .filter((group) => group.status === 'inactive')
     .map((group, index) => mapGroupCard(group, index, userId, db));
 }
 
 export async function fetchAccessibleGroups(): Promise<Group[]> {
-  logger.info('Fetch accessible groups started', { table: 'groups' });
+  const userId = getCurrentUserId();
+  if (!userId) {
+    return [];
+  }
+
+  logger.info('Fetch accessible groups started', { table: 'groups', userId });
   try {
-    const { data, error } = await supabase.from('groups').select(GROUP_COLUMNS).order('name', { ascending: true });
-    if (error) {
-      throw error;
-    }
-    const groups = (data ?? []).map(mapGroup);
-    logger.info('Fetch accessible groups succeeded', { table: 'groups', count: groups.length });
+    const groups = await fetchGroupsForCurrentUser(userId);
+    logger.info('Fetch accessible groups succeeded', { table: 'groups', count: groups.length, userId });
     return groups;
   } catch (error) {
-    logger.error('Fetch accessible groups failed', error, { table: 'groups' });
+    logger.error('Fetch accessible groups failed', error, { table: 'groups', userId });
     throw error;
   }
 }
@@ -513,48 +492,27 @@ export async function fetchAccessibleGroupOptions(
 
 export function getAccessibleGroupOptions(userId: string = getCurrentUserId()): GroupSelectorOption[] {
   const db = readDb();
-  return getGroups()
-    .filter((group) => {
-      if (group.ownerId === userId) {
-        return true;
-      }
-      const member = findMemberForUser(group.id, userId, db);
-      return member?.invitationStatus === 'active' && member.isActive !== false;
-    })
-    .map((group) => ({
-      id: group.id,
-      name: group.name,
-      type: group.type,
-      memberCount: getGroupMembers(group.id, db).filter(
-        (m) => m.role === 'owner' || (m.invitationStatus === 'active' && m.isActive !== false),
-      ).length,
-    }));
+  return getAccessibleGroupsForUser(userId, db).map((group) => ({
+    id: group.id,
+    name: group.name,
+    type: group.type,
+    memberCount: getGroupMembers(group.id, db).filter(
+      (m) => m.role === 'owner' || (m.invitationStatus === 'active' && m.isActive !== false),
+    ).length,
+  }));
 }
 
 export function getPrimaryGroupIdForUser(userId: string = getCurrentUserId()): string | undefined {
-  const db = readDb();
-  const groups = getGroups();
-  return (
-    groups.find((group) => {
-      if (group.ownerId === userId) {
-        return true;
-      }
-      const member = findMemberForUser(group.id, userId, db);
-      return member?.invitationStatus === 'active' && member.isActive !== false;
-    })?.id ?? groups[0]?.id
-  );
+  const groups = getAccessibleGroupsForUser(userId).filter((group) => isActiveGroupStatus(group.status));
+  return groups[0]?.id;
 }
 
 export function getGroupsSummary(userId: string = getCurrentUserId()): GroupsSummaryView {
   const cards = buildGroupCards(userId);
   let youOwedCents = 0;
   let youOweCents = 0;
-  for (const group of getGroups()) {
-    if (!isActiveGroupStatus(group.status) || group.deletedAt) {
-      continue;
-    }
-    const member = findMemberForUser(group.id, userId);
-    if (!member || member.invitationStatus !== 'active' || member.isActive === false) {
+  for (const group of getAccessibleGroupsForUser(userId)) {
+    if (!isActiveGroupStatus(group.status)) {
       continue;
     }
     const balanceSummary = getCurrentUserGroupBalanceSummary(group.id, userId);

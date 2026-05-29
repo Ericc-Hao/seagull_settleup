@@ -8,7 +8,7 @@ import { getCategoryConfig, normalizeCategoryKey } from '../utils/category';
 import { formatMonthYearOverview, isInCurrentMonth } from '../utils/date';
 import { addCents, formatCAD } from '../utils/money';
 import { findMemberForUser, getExpenseSplits, getGroupExpenses, readDb } from './dbHelpers';
-import { buildGroupCards, getCurrentUserId } from './groupService';
+import { getAccessibleGroupsForUser, buildGroupCards, getCurrentUserId } from './groupService';
 import { getPersonalExpenses } from './expenseService';
 import { getCurrentUserGroupBalanceSummary } from './settlementService';
 
@@ -23,16 +23,14 @@ export function getHomeOverview(userId: string = getCurrentUserId()): HomeOvervi
   let youOweCents = 0;
   let splitShareCents = 0;
 
-  for (const group of db.groups) {
+  for (const group of getAccessibleGroupsForUser(userId)) {
     const member = findMemberForUser(group.id, userId, db);
-    if (!member) {
-      continue;
-    }
-
-    for (const expense of getGroupExpenses(group.id, db)) {
-      const split = getExpenseSplits(expense.id, db).find((entry) => entry.memberId === member.id);
-      if (split && isInCurrentMonth(expense.expenseDate)) {
-        splitShareCents += split.shareAmountCents;
+    if (member) {
+      for (const expense of getGroupExpenses(group.id, db)) {
+        const split = getExpenseSplits(expense.id, db).find((entry) => entry.memberId === member.id);
+        if (split && isInCurrentMonth(expense.expenseDate)) {
+          splitShareCents += split.shareAmountCents;
+        }
       }
     }
 
@@ -89,7 +87,6 @@ export function getHomeBookkeeping(userId: string = getCurrentUserId()): Categor
 
 export function getHomeSplitGroups(userId: string = getCurrentUserId()): SplitGroupCardView[] {
   return buildGroupCards(userId)
-    .filter((card) => card.balanceStatus !== 'settled' || card.totalSpentCents > 0)
     .slice(0, 2)
     .map((card) => ({
       id: card.id,

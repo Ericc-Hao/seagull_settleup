@@ -4,6 +4,7 @@ import {
   optimizeTransfers,
 } from '../core/settlement';
 import type { MemberBalance } from '../core/settlement/types';
+import { getCachedUserId } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { mapSettlement } from '../lib/mappers';
 import type { GroupMember, Settlement, SettlementMode } from '../types/models';
@@ -28,7 +29,7 @@ import {
   getTeams,
   readDb,
 } from './dbHelpers';
-import { getCachedUserId } from '../lib/auth';
+import { getAccessibleGroupsForUser } from './groupAccess';
 import { isBalanceEligibleMember } from '../utils/groupParticipants';
 import { SETTLEMENT_COLUMNS, SETTLEMENT_LIST_LIMIT } from '../lib/queryColumns';
 
@@ -1305,29 +1306,6 @@ export function getSettlementHistory(groupId: string): SettlementHistoryItemView
 
   logger.info('Settlement history fetch succeeded', { groupId, count: history.length });
   return history;
-}
-
-function getAccessibleGroupsForUser(userId: string = getCurrentUserId()): { id: string; name: string }[] {
-  const db = readDb();
-  return db.groups
-    .filter((group) => {
-      if (group.ownerId === userId) {
-        return true;
-      }
-      const member = findMemberForUser(group.id, userId, db);
-      if (!member || member.isActive === false) {
-        return false;
-      }
-      if (
-        member.invitationStatus === 'pending' ||
-        member.invitationStatus === 'declined' ||
-        member.invitationStatus === 'removed'
-      ) {
-        return false;
-      }
-      return true;
-    })
-    .map((group) => ({ id: group.id, name: group.name }));
 }
 
 function isSettlementRelevantToUser(

@@ -5,7 +5,6 @@ import {
   mapCategory,
   mapExpense,
   mapExpenseSplit,
-  mapGroup,
   mapGroupInvitation,
   mapGroupMember,
   mapProfile,
@@ -17,6 +16,7 @@ import {
 } from './mappers';
 import { supabase } from './supabase';
 import { createLogger } from '../utils/logger';
+import { fetchGroupsForCurrentUser } from '../services/groupAccess';
 
 const logger = createLogger('cacheRefresh');
 
@@ -55,17 +55,26 @@ async function fetchProfileSlice(): Promise<Partial<DatabaseSnapshot>> {
 }
 
 async function fetchGroupsSlice(): Promise<Partial<DatabaseSnapshot>> {
-  const [groupsRes, teamsRes, teamMembersRes] = await Promise.all([
-    supabase.from('groups').select('*'),
+  const userId = await requireSessionUserId();
+  if (!userId) {
+    return {
+      groups: [],
+      teams: [],
+      teamMembers: [],
+    };
+  }
+
+  const [groups, teamsRes, teamMembersRes] = await Promise.all([
+    fetchGroupsForCurrentUser(userId),
     supabase.from('teams').select('*'),
     supabase.from('team_members').select('*'),
   ]);
-  const firstError = [groupsRes, teamsRes, teamMembersRes].find((result) => result.error)?.error;
+  const firstError = [teamsRes, teamMembersRes].find((result) => result.error)?.error;
   if (firstError) {
     throw firstError;
   }
   return {
-    groups: (groupsRes.data ?? []).map(mapGroup),
+    groups,
     teams: (teamsRes.data ?? []).map(mapTeam),
     teamMembers: (teamMembersRes.data ?? []).map(mapTeamMember),
   };
